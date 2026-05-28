@@ -41,7 +41,7 @@ async function main() {
   const drive = google.drive({ version: "v3", auth });
 
   const res = await drive.files.list({
-    q: `'${FOLDER_ID}' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel')`,
+    q: `'${FOLDER_ID}' in parents and trashed=false and name contains '.xlsx'`,
     fields: "files(id,name,modifiedTime)",
     pageSize: 1000
   });
