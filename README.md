@@ -1,15 +1,7 @@
-# Bawarchi Google Drive to GoDaddy Production Setup
+# Bawarchi GAAP Two-File Production Dashboard
 
-Flow:
+Daily users upload:
+- PaytypeReport_YYYY-MM-DD.xlsx into Google Drive Paytype folder
+- SalesInvoiceAuditTrailReport_YYYY-MM-DD.xlsx into Google Drive SalesAudit folder
 
-Google Drive Paytype folder -> GitHub Actions scheduled job -> data/paytype-data.json -> GoDaddy hosting.
-
-Users upload daily Paytype Excel files only to Google Drive.
-
-Required GitHub Secrets:
-- GOOGLE_SERVICE_ACCOUNT_JSON
-- DRIVE_PAYTYPE_FOLDER_ID
-- GODADDY_FTP_SERVER
-- GODADDY_FTP_USERNAME
-- GODADDY_FTP_PASSWORD
-- GODADDY_FTP_REPORTS_DIR
+GitHub Actions generates data/gaap-dashboard-data.json and deploys to GoDaddy.

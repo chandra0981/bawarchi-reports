@@ -1,9 +1,1 @@
-{
-  "scripts": {
-    "refresh": "node scripts/refresh-paytype-from-drive.js"
-  },
-  "dependencies": {
-    "googleapis": "^140.0.1",
-    "xlsx": "^0.18.5"
-  }
-}
+{"scripts":{"refresh":"node scripts/refresh-gaap-dashboard-from-drive.js"},"dependencies":{"googleapis":"^140.0.1","xlsx":"^0.18.5"}}
