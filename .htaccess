@@ -1,8 +1,0 @@
-AuthType Basic
-AuthName "Bawarchi Reports"
-AuthUserFile {ABSOLUTE_PATH_TO_REPORTS}/.htpasswd
-Require valid-user
-
-<FilesMatch "\.(json|js|html|css)$">
-  Require valid-user
-</FilesMatch>
