@@ -1,7 +1,14 @@
-# Bawarchi GAAP Two-File Production Dashboard
+# Bawarchi Protected GAAP Dashboard
 
-Daily users upload:
-- PaytypeReport_YYYY-MM-DD.xlsx into Google Drive Paytype folder
-- SalesInvoiceAuditTrailReport_YYYY-MM-DD.xlsx into Google Drive SalesAudit folder
+Server login:
+- Username: admin
+- Password: Bawarchi!@#25
 
-GitHub Actions generates data/gaap-dashboard-data.json and deploys to GoDaddy.
+Upload these files to GitHub and deploy through the workflow.
+
+Important: after deployment to GoDaddy, update `.htaccess` and replace:
+`{ABSOLUTE_PATH_TO_REPORTS}`
+
+with your real hosting absolute path to `/reports`.
+
+If unsure, use cPanel "Directory Privacy" on the `/reports` folder instead of manual `.htaccess`.

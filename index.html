@@ -1,30 +1,199 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GAAP Sales Audit + Paytype Dashboard</title>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bawarchi Secure GAAP Dashboard</title>
 <style>
-:root{--bg:#f6f7fb;--text:#111827;--muted:#6b7280;--border:#e5e7eb}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:linear-gradient(135deg,#111827,#374151);color:#fff;padding:24px 28px}h1{margin:0;font-size:26px}header p{margin:8px 0 0;color:#d1d5db}.container{padding:22px;max-width:1500px;margin:auto}.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:16px}.grid{display:grid;gap:14px}.kpis{grid-template-columns:repeat(6,minmax(160px,1fr))}.cards2{grid-template-columns:1fr 1fr}@media(max-width:1000px){.kpis,.cards2{grid-template-columns:1fr 1fr}}@media(max-width:650px){.kpis,.cards2{grid-template-columns:1fr}}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.value{font-size:24px;font-weight:800;margin-top:6px}.sub{font-size:12px;color:var(--muted);margin-top:4px}.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}select,input{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;min-width:190px}button{padding:10px 14px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}h2{font-size:18px;margin:0 0 10px}.note,.status{font-size:13px;color:#6b7280;line-height:1.5}.table-wrap{overflow:auto;max-height:560px;border:1px solid var(--border);border-radius:12px;background:#fff}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left}th{position:sticky;top:0;background:#f9fafb;z-index:1;font-size:12px;text-transform:uppercase;color:#4b5563}tr:hover{background:#fafafa}.num{text-align:right;font-variant-numeric:tabular-nums}.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.uber{background:#dcfce7;color:#166534}.store{background:#f3f4f6;color:#374151}.bad{background:#fee2e2;color:#991b1b}.bar-row{display:flex;align-items:center;gap:10px;margin:8px 0}.bar-label{width:190px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bar-track{flex:1;background:#e5e7eb;height:14px;border-radius:999px;overflow:hidden}.bar-fill{height:100%;background:#374151}.bar-val{width:95px;text-align:right;font-size:13px}.footer{padding:18px;text-align:center;font-size:12px;color:var(--muted)}
-</style></head><body>
-<header><h1>GAAP Sales Audit + Paytype Dashboard</h1><p>Paytype + Sales Invoice Audit Trail · Uber logic: Employee = Online AND Sales Name is not blank</p><div id="status" class="status">Loading report data...</div></header>
-<div class="container"><div class="card"><div class="controls"><select id="dateFilter"><option>All Dates</option></select><select id="channelFilter"><option>All</option><option>Uber Orders</option><option>Non-Uber / Store</option></select><select id="employeeFilter"><option>All Employees</option></select><input id="searchBox" placeholder="Search invoice, order, employee, sales name..."><button onclick="resetFilters()">Reset</button><span class="note">This dashboard does not use the Uber OnlineOrder file. It classifies Uber inside GAAP using Paytype/Audit Trail only.</span></div></div>
-<div class="grid kpis" id="kpis"></div>
-<div class="grid cards2"><div class="card"><h2>Employee Sales Summary</h2><div id="empBars"></div></div><div class="card"><h2>Payment Method Split</h2><div id="payBars"></div></div></div>
-<div class="grid cards2"><div class="card"><h2>Hourly Sales</h2><div id="hourBars"></div></div><div class="card"><h2>Top Products from Audit Trail</h2><div id="prodBars"></div></div></div>
-<div class="card"><h2>Invoice-Level Reconciliation</h2><p class="note">Invoice number, employee, Sales Name, payment method, GAAP channel classification, amount, payment columns, and audit flags.</p><div class="table-wrap"><table id="invoiceTable"></table></div></div>
-<div class="card"><h2>Audit Trail Events</h2><p class="note">Full event detail: employee names, product actions, status changes, payments, cancellations, price overrides and device names.</p><div class="table-wrap"><table id="eventTable"></table></div></div></div>
-<div class="footer">Generated from Google Drive reports</div>
+:root{--bg:#f6f7fb;--card:#fff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--dark:#111827;--green:#166534;--red:#991b1b}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#111827,#374151);padding:20px}
+.login-card{background:#fff;border-radius:18px;padding:24px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.login-card h1{margin:0 0 8px}.login-card p{color:#6b7280}.login-card input{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:10px;margin:8px 0 12px}
+.login-card button{width:100%;padding:12px;border:0;border-radius:10px;background:#111827;color:#fff;font-weight:700}.err{color:#991b1b;font-weight:700;margin-top:10px}
+.hidden{display:none}
+header{background:linear-gradient(135deg,#111827,#374151);color:#fff;padding:24px 28px}
+h1{margin:0;font-size:26px}header p{margin:8px 0 0;color:#d1d5db}
+.container{padding:22px;max-width:1500px;margin:auto}.card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:16px}
+.grid{display:grid;gap:14px}.kpis{grid-template-columns:repeat(6,minmax(160px,1fr))}.cards2{grid-template-columns:1fr 1fr}
+@media(max-width:1000px){.kpis,.cards2{grid-template-columns:1fr 1fr}}@media(max-width:650px){.kpis,.cards2{grid-template-columns:1fr}}
+.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.value{font-size:24px;font-weight:800;margin-top:6px}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}select,input{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;min-width:190px}
+button{padding:10px 14px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}h2{font-size:18px;margin:0 0 10px}
+.note{font-size:13px;color:var(--muted);line-height:1.5}.table-wrap{overflow:auto;max-height:560px;border:1px solid var(--border);border-radius:12px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:#f9fafb;z-index:1;font-size:12px;text-transform:uppercase;color:#4b5563}tr:hover{background:#fafafa}.num{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.uber{background:#dcfce7;color:#166534}.store{background:#f3f4f6;color:#374151}.bad{background:#fee2e2;color:#991b1b}
+.bar-row{display:flex;align-items:center;gap:10px;margin:8px 0}.bar-label{width:190px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bar-track{flex:1;background:#e5e7eb;height:14px;border-radius:999px;overflow:hidden}.bar-fill{height:100%;background:#374151}.bar-val{width:95px;text-align:right;font-size:13px}.footer{padding:18px;text-align:center;font-size:12px;color:var(--muted)}
+.status{font-size:13px;color:#d1d5db;margin-top:10px}.top-actions{float:right}
+</style>
+</head>
+<body>
+<div id="loginScreen" class="login">
+  <div class="login-card">
+    <h1>Bawarchi Reports</h1>
+    <p>Secure admin dashboard</p>
+    <label>Username</label>
+    <input id="loginUser" value="admin" autocomplete="username">
+    <label>Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password">
+    <button onclick="login()">Login</button>
+    <div id="loginError" class="err"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+  <button class="top-actions" onclick="logout()">Logout</button>
+  <h1>GAAP Sales Audit + Paytype Dashboard</h1>
+  <p id="subtitle">Paytype + Sales Invoice Audit Trail · Uber logic: Employee = Online AND Sales Name is not blank</p>
+  <div id="status" class="status">Loading report data...</div>
+</header>
+<div class="container">
+  <div class="card">
+    <div class="controls">
+      <select id="dateFilter"><option>All Dates</option></select>
+      <select id="channelFilter"><option>All</option><option>Uber Orders</option><option>Non-Uber / Store</option></select>
+      <select id="employeeFilter"><option>All Employees</option></select>
+      <input id="searchBox" placeholder="Search invoice, order, employee, sales name...">
+      <button onclick="resetFilters()">Reset</button>
+      <span class="note">This dashboard does not use the Uber OnlineOrder file. It classifies Uber inside GAAP using Paytype/Audit Trail only.</span>
+    </div>
+  </div>
+  <div class="grid kpis" id="kpis"></div>
+  <div class="grid cards2">
+    <div class="card"><h2>Employee Sales Summary</h2><div id="empBars"></div></div>
+    <div class="card"><h2>Payment Method Split</h2><div id="payBars"></div></div>
+  </div>
+  <div class="grid cards2">
+    <div class="card"><h2>Hourly Sales</h2><div id="hourBars"></div></div>
+    <div class="card"><h2>Top Products from Audit Trail</h2><div id="prodBars"></div></div>
+  </div>
+  <div class="card">
+    <h2>Invoice-Level Reconciliation</h2>
+    <p class="note">Invoice number, employee, Sales Name, payment method, GAAP channel classification, amount, payment columns, and audit flags.</p>
+    <div class="table-wrap"><table id="invoiceTable"></table></div>
+  </div>
+  <div class="card">
+    <h2>Audit Trail Events</h2>
+    <p class="note">Full event detail: employee names, product actions, status changes, payments, cancellations, price overrides and device names.</p>
+    <div class="table-wrap"><table id="eventTable"></table></div>
+  </div>
+</div>
+<div class="footer" id="footer">Generated from Google Drive reports</div>
+</div>
+
 <script>
-let DATA={kpi:{},invoices:[],events:[]}; const fmt=n=>"R "+Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2}); const num=n=>Number(n||0).toLocaleString("en-ZA"); const safe=v=>v==null?"":String(v);
-function getFilteredInvoices(){const date=dateFilter.value,ch=channelFilter.value,emp=employeeFilter.value,q=searchBox.value.trim().toLowerCase();return (DATA.invoices||[]).filter(r=>{if(date!="All Dates"&&r.Date!==date)return false;if(ch!="All"&&r.Channel!==ch)return false;if(emp!="All Employees"&&r.Employee!==emp)return false;if(q&&!([r["Invoice Number"],r.OrderNumber,r.Employee,r.SalesName,r.PaymentMethod,r.Channel,r.Device].map(safe).join(" ").toLowerCase().includes(q)))return false;return true})}
-function getFilteredEvents(){const date=dateFilter.value,ch=channelFilter.value,emp=employeeFilter.value,q=searchBox.value.trim().toLowerCase();return (DATA.events||[]).filter(r=>{if(date!="All Dates"&&r.Date!==date)return false;if(ch!="All"&&r.Channel!==ch)return false;if(emp!="All Employees"&&r.Employee!==emp)return false;if(q&&!([r.Invoice,r.Order,r.Employee,r["Sales Name"],r.Product,r.Type,r.Device,r.Risk].map(safe).join(" ").toLowerCase().includes(q)))return false;return true})}
-function recalcKpis(rows,events){const total=rows.reduce((s,r)=>s+Number(r.Sales||0),0),uber=rows.filter(r=>r.Channel==="Uber Orders"),store=rows.filter(r=>r.Channel!=="Uber Orders");return{total_sales:total,total_invoices:new Set(rows.map(r=>r["Invoice Number"])).size,uber_sales:uber.reduce((s,r)=>s+Number(r.Sales||0),0),uber_invoices:new Set(uber.map(r=>r["Invoice Number"])).size,store_sales:store.reduce((s,r)=>s+Number(r.Sales||0),0),store_invoices:new Set(store.map(r=>r["Invoice Number"])).size,audit_rows:events.length,price_override_count:events.filter(e=>safe(e.Type).toLowerCase().includes("price override")).length,cancel_count:events.filter(e=>(safe(e.Type)+" "+safe(e.Risk)).toLowerCase().includes("cancel")).length}}
-function renderKpis(rows,events){const k=recalcKpis(rows,events);const items=[["Total Sales",fmt(k.total_sales),`${k.total_invoices} invoices`],["Uber Orders",fmt(k.uber_sales),`${k.uber_invoices} invoices`],["Non-Uber / Store",fmt(k.store_sales),`${k.store_invoices} invoices`],["Audit Rows",num(k.audit_rows),"events loaded"],["Price Overrides",num(k.price_override_count),"audit events"],["Cancellations",num(k.cancel_count),"audit risk flags"]];kpis.innerHTML=items.map(([l,v,s])=>`<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("")}
-function bars(elId,rows,labelField,valueField,money=true){const map={};rows.forEach(r=>{const k=safe(r[labelField])||"Unknown";map[k]=(map[k]||0)+Number(r[valueField]||0)});const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,12),max=Math.max(...arr.map(x=>x[1]),1);document.getElementById(elId).innerHTML=arr.map(([l,v])=>`<div class="bar-row"><div class="bar-label" title="${l}">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/max*100).toFixed(1)}%"></div></div><div class="bar-val">${money?fmt(v):num(v)}</div></div>`).join("")||`<div class="note">No data</div>`}
-function eventProductBars(events){const adds=events.filter(e=>safe(e.Type).toLowerCase().includes("add order items")&&safe(e.Product));const map={};adds.forEach(e=>map[e.Product]=(map[e.Product]||0)+1);const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,12),max=Math.max(...arr.map(x=>x[1]),1);prodBars.innerHTML=arr.map(([l,v])=>`<div class="bar-row"><div class="bar-label" title="${l}">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/max*100).toFixed(1)}%"></div></div><div class="bar-val">${num(v)}</div></div>`).join("")||`<div class="note">No product events</div>`}
-function renderInvoiceTable(rows){const headers=["Invoice Number","Date","Time","Employee","SalesName","OrderNumber","PaymentMethod","Sales","Cash","Card","Accounts","Channel","AuditRows","Types","PriceOverrides","Cancellations","MaxBalance"];invoiceTable.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`+rows.map(r=>`<tr>${headers.map(h=>{let v=r[h];if(["Sales","Cash","Card","Accounts","MaxBalance"].includes(h))v=fmt(v);if(h==="Channel")v=`<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`;return `<td class="${["Sales","Cash","Card","Accounts","MaxBalance"].includes(h)?"num":""}">${safe(v)}</td>`}).join("")}</tr>`).join("")+`</tbody>`}
-function renderEventTable(rows){const headers=["Date","Time","Employee","Invoice","Order","Product","Type","Before","After","Difference","Bal Before","Bal After","Authorized By","Sales Name","Device","Channel","Risk"];eventTable.innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>`+rows.slice(0,1500).map(r=>`<tr>${headers.map(h=>{let v=r[h];if(["Difference","Bal Before","Bal After"].includes(h)&&v!==""&&v!=null)v=fmt(v);if(h==="Channel")v=`<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`;if(h==="Risk"&&safe(v))v=`<span class="badge bad">${v}</span>`;return `<td>${safe(v)}</td>`}).join("")}</tr>`).join("")+`</tbody>`}
-function populateFilters(){const dates=[...new Set((DATA.invoices||[]).map(r=>r.Date).filter(Boolean))].sort();dateFilter.innerHTML=`<option>All Dates</option>`+dates.map(d=>`<option>${d}</option>`).join("");const emps=[...new Set((DATA.invoices||[]).map(r=>r.Employee).filter(Boolean))].sort();employeeFilter.innerHTML=`<option>All Employees</option>`+emps.map(e=>`<option>${e}</option>`).join("")}
-function render(){const rows=getFilteredInvoices(),events=getFilteredEvents();renderKpis(rows,events);bars("empBars",rows,"Employee","Sales",true);bars("payBars",rows,"PaymentMethod","Sales",true);bars("hourBars",rows.map(r=>({...r,Hour:safe(r.Time).slice(0,2)+":00"})),"Hour","Sales",true);eventProductBars(events);renderInvoiceTable(rows);renderEventTable(events)}
-function resetFilters(){dateFilter.value="All Dates";channelFilter.value="All";employeeFilter.value="All Employees";searchBox.value="";render()}
-[dateFilter,channelFilter,employeeFilter,searchBox].forEach(el=>el.addEventListener("input",render));
-fetch("data/gaap-dashboard-data.json?ts="+Date.now()).then(r=>r.json()).then(d=>{DATA=d;status.textContent="Last refresh: "+(DATA.generated_at||"unknown")+" · Files: "+((DATA.files||[]).map(f=>f.name).join(", ")||"none");populateFilters();render()}).catch(err=>{status.textContent="Could not load data/gaap-dashboard-data.json";console.error(err)});
-</script></body></html>
+const ADMIN_USER = "admin";
+const ADMIN_PASS = "Bawarchi!@#25";
+function login(){
+  if(loginUser.value.trim() === ADMIN_USER && loginPass.value === ADMIN_PASS){
+    sessionStorage.setItem("bawarchi_reports_auth","yes");
+    loginScreen.classList.add("hidden");
+    app.classList.remove("hidden");
+    loadData();
+  }else{
+    loginError.textContent = "Invalid username or password";
+  }
+}
+function logout(){
+  sessionStorage.removeItem("bawarchi_reports_auth");
+  location.reload();
+}
+if(sessionStorage.getItem("bawarchi_reports_auth")==="yes"){
+  loginScreen.classList.add("hidden");
+  app.classList.remove("hidden");
+  loadData();
+}
+
+let DATA = {kpi:{}, invoices:[], events:[], generated_at:""};
+const fmt = n => "R " + Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+const num = n => Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:0,maximumFractionDigits:0});
+function safe(v){return v==null?"":String(v)}
+function getFilteredInvoices(){
+  const date = dateFilter.value, ch = channelFilter.value, emp = employeeFilter.value, q = searchBox.value.trim().toLowerCase();
+  return (DATA.invoices||[]).filter(r=>{
+    if(date !== "All Dates" && r.Date !== date) return false;
+    if(ch !== "All" && r.Channel !== ch) return false;
+    if(emp !== "All Employees" && r.Employee !== emp) return false;
+    if(q){
+      const hay = [r["Invoice Number"],r.OrderNumber,r.Employee,r.SalesName,r.PaymentMethod,r.Channel,r.Device].map(safe).join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function getFilteredEvents(){
+  const date = dateFilter.value, ch = channelFilter.value, emp = employeeFilter.value, q = searchBox.value.trim().toLowerCase();
+  return (DATA.events||[]).filter(r=>{
+    if(date !== "All Dates" && r.Date !== date) return false;
+    if(ch !== "All" && r.Channel !== ch) return false;
+    if(emp !== "All Employees" && r.Employee !== emp) return false;
+    if(q){
+      const hay = [r.Invoice,r.Order,r.Employee,r["Sales Name"],r.Product,r.Type,r.Device,r.Risk].map(safe).join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function recalcKpis(rows, events){
+  const total = rows.reduce((s,r)=>s+Number(r.Sales||0),0);
+  const uber = rows.filter(r=>r.Channel==="Uber Orders"), store = rows.filter(r=>r.Channel!=="Uber Orders");
+  return {
+    total_sales: total, total_invoices: new Set(rows.map(r=>r["Invoice Number"])).size,
+    uber_sales: uber.reduce((s,r)=>s+Number(r.Sales||0),0), uber_invoices: new Set(uber.map(r=>r["Invoice Number"])).size,
+    store_sales: store.reduce((s,r)=>s+Number(r.Sales||0),0), store_invoices: new Set(store.map(r=>r["Invoice Number"])).size,
+    audit_rows: events.length,
+    price_override_count: events.filter(e=>safe(e.Type).toLowerCase().includes("price override")).length,
+    cancel_count: events.filter(e=>(safe(e.Type)+" "+safe(e.Risk)).toLowerCase().includes("cancel")).length
+  }
+}
+function renderKpis(rows, events){
+  const k = recalcKpis(rows, events);
+  const items = [["Total Sales",fmt(k.total_sales),`${k.total_invoices} invoices`],["Uber Orders",fmt(k.uber_sales),`${k.uber_invoices} invoices`],["Non-Uber / Store",fmt(k.store_sales),`${k.store_invoices} invoices`],["Audit Rows",num(k.audit_rows),"events loaded"],["Price Overrides",num(k.price_override_count),"audit events"],["Cancellations",num(k.cancel_count),"audit risk flags"]];
+  kpis.innerHTML = items.map(([l,v,s])=>`<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("");
+}
+function bars(elId, rows, labelField, valueField, money=true){
+  const map = {};
+  rows.forEach(r=>{const k = safe(r[labelField]) || "Unknown"; map[k] = (map[k]||0) + Number(r[valueField]||0);});
+  const arr = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const max = Math.max(...arr.map(x=>x[1]),1);
+  document.getElementById(elId).innerHTML = arr.map(([l,v])=>`<div class="bar-row"><div class="bar-label" title="${l}">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/max*100).toFixed(1)}%"></div></div><div class="bar-val">${money?fmt(v):num(v)}</div></div>`).join("") || `<div class="note">No data</div>`;
+}
+function eventProductBars(events){
+  const adds = events.filter(e=>safe(e.Type).toLowerCase().includes("add order items") && safe(e.Product));
+  const map = {}; adds.forEach(e=>{map[e.Product]=(map[e.Product]||0)+1});
+  const arr = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const max = Math.max(...arr.map(x=>x[1]),1);
+  prodBars.innerHTML = arr.map(([l,v])=>`<div class="bar-row"><div class="bar-label" title="${l}">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/max*100).toFixed(1)}%"></div></div><div class="bar-val">${num(v)}</div></div>`).join("") || `<div class="note">No product events</div>`;
+}
+function renderInvoiceTable(rows){
+  const headers = ["Invoice Number","Date","Time","Employee","SalesName","OrderNumber","PaymentMethod","Sales","Cash","Card","Accounts","Channel","AuditRows","Types","PriceOverrides","Cancellations","MaxBalance"];
+  invoiceTable.innerHTML = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>` + rows.map(r=>`<tr>${headers.map(h=>{let v=r[h]; if(["Sales","Cash","Card","Accounts","MaxBalance"].includes(h)) v=fmt(v); if(h==="Channel") v=`<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`; if(["Sales","Cash","Card","Accounts","MaxBalance"].includes(h)) return `<td class="num">${v}</td>`; return `<td>${safe(v)}</td>`;}).join("")}</tr>`).join("") + `</tbody>`;
+}
+function renderEventTable(rows){
+  const headers = ["Date","Time","Employee","Invoice","Order","Product","Type","Before","After","Difference","Bal Before","Bal After","Authorized By","Sales Name","Device","Channel","Risk"];
+  const limited = rows.slice(0,1500);
+  eventTable.innerHTML = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>` + limited.map(r=>`<tr>${headers.map(h=>{let v=r[h]; if(["Difference","Bal Before","Bal After"].includes(h)&&v!==""&&v!=null) v=fmt(v); if(h==="Channel") v=`<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`; if(h==="Risk"&&safe(v)) v=`<span class="badge bad">${v}</span>`; return `<td>${safe(v)}</td>`;}).join("")}</tr>`).join("") + `</tbody>`;
+}
+function populateFilters(){
+  const dates=[...new Set((DATA.invoices||[]).map(r=>r.Date).filter(Boolean))].sort();
+  dateFilter.innerHTML=`<option>All Dates</option>`+dates.map(d=>`<option>${d}</option>`).join("");
+  const emps=[...new Set((DATA.invoices||[]).map(r=>r.Employee).filter(Boolean))].sort();
+  employeeFilter.innerHTML=`<option>All Employees</option>`+emps.map(e=>`<option>${e}</option>`).join("");
+}
+function render(){
+  const rows=getFilteredInvoices(), events=getFilteredEvents();
+  renderKpis(rows,events); bars("empBars",rows,"Employee","Sales",true); bars("payBars",rows,"PaymentMethod","Sales",true);
+  bars("hourBars",rows.map(r=>({...r,Hour:safe(r.Time).slice(0,2)+":00"})),"Hour","Sales",true);
+  eventProductBars(events); renderInvoiceTable(rows); renderEventTable(events);
+}
+function resetFilters(){dateFilter.value="All Dates";channelFilter.value="All";employeeFilter.value="All Employees";searchBox.value="";render();}
+function loadData(){
+  fetch("data/gaap-dashboard-data.json?ts="+Date.now())
+    .then(r=>r.json()).then(d=>{DATA=d;status.textContent="Last refresh: "+(DATA.generated_at||"unknown")+" · Files: "+((DATA.files||[]).map(f=>f.name).join(", ")||"none");footer.textContent="Generated from Google Drive Paytype and Sales Invoice Audit Trail reports";populateFilters();render();})
+    .catch(err=>{status.textContent="Could not load data/gaap-dashboard-data.json";console.error(err);});
+}
+</script>
+</body>
+</html>
