@@ -16,19 +16,19 @@ if (!SERVICE_ACCOUNT_JSON) throw new Error("Missing GitHub secret: GOOGLE_SERVIC
 fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
-function parseDateFromFilename(name) {
-  const m = name.match(/(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : null;
-}
-
 function toNumber(v) {
   if (v === null || v === undefined || v === "") return 0;
   if (typeof v === "number") return v;
   return Number(String(v).replace(/[R,\s]/g, "")) || 0;
 }
 
-function normaliseHeader(h) {
+function norm(h) {
   return String(h || "").trim().toLowerCase();
+}
+
+function parseDateFromFilename(name) {
+  const m = String(name).match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
 }
 
 async function main() {
@@ -46,10 +46,12 @@ async function main() {
     pageSize: 1000
   });
 
-  const files = res.data.files || [];
+  const driveFiles = res.data.files || [];
+  console.log("Files found:", driveFiles.map(f => f.name).join(", ") || "NONE");
+
   const allTransactions = [];
 
-  for (const file of files) {
+  for (const file of driveFiles) {
     const dest = path.join(DOWNLOAD_DIR, file.name);
     const response = await drive.files.get(
       { fileId: file.id, alt: "media" },
@@ -58,40 +60,59 @@ async function main() {
     fs.writeFileSync(dest, Buffer.from(response.data));
 
     const reportDate = parseDateFromFilename(file.name);
-    const workbook = XLSX.readFile(dest);
+    const workbook = XLSX.readFile(dest, { cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
     const rows = XLSX.utils.sheet_to_json(sheet, {
-  range: 8,
-  defval: ""
-});
+      range: 8,
+      defval: "",
+      raw: true
+    });
+
+    console.log(`${file.name}: parsed rows = ${rows.length}`);
+    console.log("First row sample:", JSON.stringify(rows[0] || {}));
 
     for (const row of rows) {
       const map = {};
-      for (const k of Object.keys(row)) map[normaliseHeader(k)] = row[k];
+      for (const k of Object.keys(row)) map[norm(k)] = row[k];
 
-      const date = map["date"] || map["day"] || reportDate;
-      const paymentMethod = map["payment method"] || map["paytype"] || map["payment"] || "";
-      const inclusive = toNumber(map["inclusive"] || map["paytype inclusive"] || map["amount"] || map["total"]);
+      const invoice = String(map["invoice number"] || "").trim();
 
+      if (!invoice || invoice.toLowerCase().startsWith("invoice")) continue;
+      if (String(map["date"] || "").startsWith("Node:")) continue;
+
+      const dateValue = map["date"];
+      const date = dateValue instanceof Date
+        ? dateValue.toISOString().slice(0, 10)
+        : String(dateValue || reportDate).slice(0, 10);
+
+      const inclusive = toNumber(map["inclusive"]);
       if (!date || !inclusive) continue;
 
       allTransactions.push({
         source_file: file.name,
-        date: String(date).slice(0, 10),
+        date,
         time: map["time"] || "",
+        hour: map["hour"] || "",
+        half_hour: map["half hour"] || "",
         day_of_week: map["day of week"] || "",
-        invoice_number: map["invoice number"] || "",
-        payment_method: paymentMethod,
+        weekday_type: map["weekday type"] || "",
+        invoice_number: invoice,
+        payment_method: map["payment method"] || "",
         exclusive: toNumber(map["exclusive"]),
         tax: toNumber(map["tax"]),
         inclusive,
-        cash: toNumber(map["cash"]),
-        credit_card: toNumber(map["credit card"]),
-        accounts: toNumber(map["accounts"]),
-        tips: toNumber(map["tips"]),
         employee: map["employee"] || "",
         guest_count: toNumber(map["guest count"]),
         order_number: map["order number"] || "",
+        tips: toNumber(map["tips"]),
+        device_name: map["device name"] || "",
+        recorded_time: map["recorded time"] || "",
+        cash: toNumber(map["cash"]),
+        credit_card: toNumber(map["credit card"]),
+        accounts: toNumber(map["accounts"]),
+        cheque: toNumber(map["cheque"]),
+        non_turnover: toNumber(map["non turnover"]),
         sales_name: map["sales name"] || ""
       });
     }
@@ -111,6 +132,7 @@ async function main() {
     if (!dailyMap[t.date]) {
       dailyMap[t.date] = {
         date: t.date,
+        day_of_week: t.day_of_week,
         inclusive: 0,
         cash: 0,
         credit_card: 0,
@@ -135,7 +157,7 @@ async function main() {
 
   const output = {
     generated_at: new Date().toISOString(),
-    files: files.map(f => ({ name: f.name, modifiedTime: f.modifiedTime })),
+    files: driveFiles.map(f => ({ name: f.name, modifiedTime: f.modifiedTime })),
     summary: {
       total_inclusive: total,
       cash,
@@ -144,14 +166,15 @@ async function main() {
       tips,
       transactions: allTransactions.length
     },
-    daily: Object.values(dailyMap).sort((a,b) => a.date.localeCompare(b.date)),
-    payment_methods: Object.values(paymentMap).sort((a,b) => b.inclusive - a.inclusive),
+    daily: Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date)),
+    payment_methods: Object.values(paymentMap).sort((a, b) => b.inclusive - a.inclusive),
     transactions: allTransactions
   };
 
   fs.writeFileSync(OUT_FILE, JSON.stringify(output, null, 2));
   console.log(`Created ${OUT_FILE}`);
   console.log(`Transactions loaded: ${allTransactions.length}`);
+  console.log(`Total inclusive: ${total}`);
 }
 
 main().catch(err => {
