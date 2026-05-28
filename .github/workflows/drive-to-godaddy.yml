@@ -1,0 +1,43 @@
+name: Refresh Paytype Report from Google Drive and Deploy to GoDaddy
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * *"
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Refresh report data from Google Drive
+        run: npm run refresh
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DRIVE_PAYTYPE_FOLDER_ID: ${{ secrets.DRIVE_PAYTYPE_FOLDER_ID }}
+
+      - name: Deploy dashboard to GoDaddy by FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.GODADDY_FTP_SERVER }}
+          username: ${{ secrets.GODADDY_FTP_USERNAME }}
+          password: ${{ secrets.GODADDY_FTP_PASSWORD }}
+          local-dir: ./
+          server-dir: ${{ secrets.GODADDY_FTP_REPORTS_DIR }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/tmp/**
+            reports/**
