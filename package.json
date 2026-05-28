@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "refresh": "node scripts/refresh-paytype-from-drive.js"
+  },
+  "dependencies": {
+    "googleapis": "^140.0.1",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bawarchi Paytype Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;background:#f8fafc;color:#111827}
+    header{background:#111827;color:white;padding:20px}
+    main{padding:20px;max-width:1200px;margin:auto}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:16px}
+    .value{font-size:26px;font-weight:800;margin-top:8px}
+    table{width:100%;border-collapse:collapse;background:white;margin-top:16px}
+    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+    th{background:#f1f5f9}
+    @media(max-width:800px){.cards{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Bawarchi Paytype Dashboard</h1>
+  <p>Google Drive → GitHub Actions → GoDaddy</p>
+</header>
+<main>
+  <div id="status">Loading...</div>
+  <div class="cards">
+    <div class="card">Total Sales<div class="value" id="total">-</div></div>
+    <div class="card">Cash<div class="value" id="cash">-</div></div>
+    <div class="card">Credit Card<div class="value" id="credit">-</div></div>
+    <div class="card">Accounts<div class="value" id="accounts">-</div></div>
+  </div>
+  <h2>Daily Paytype Summary</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Sales</th><th>Cash</th><th>Credit Card</th><th>Accounts</th><th>Tips</th><th>Transactions</th></tr></thead>
+    <tbody id="daily"></tbody>
+  </table>
+</main>
+<script>
+const fmt = n => "R " + Number(n || 0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+fetch("data/paytype-data.json?ts=" + Date.now())
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById("status").textContent = "Last refresh: " + data.generated_at;
+    const s = data.summary || {};
+    total.textContent = fmt(s.total_inclusive);
+    cash.textContent = fmt(s.cash);
+    credit.textContent = fmt(s.credit_card);
+    accounts.textContent = fmt(s.accounts);
+    daily.innerHTML = (data.daily || []).map(d => `
+      <tr>
+        <td>${d.date}</td>
+        <td>${fmt(d.inclusive)}</td>
+        <td>${fmt(d.cash)}</td>
+        <td>${fmt(d.credit_card)}</td>
+        <td>${fmt(d.accounts)}</td>
+        <td>${fmt(d.tips)}</td>
+        <td>${d.transactions}</td>
+      </tr>`).join("");
+  })
+  .catch(e => {
+    document.getElementById("status").textContent = "Could not load data/paytype-data.json";
+    console.error(e);
+  });
+</script>
+</body>
+</html>
