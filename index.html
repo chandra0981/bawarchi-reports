@@ -40,28 +40,117 @@ function renderEmployees(rows,events){const m={};rows.forEach(r=>{const e=safe(r
 function renderOps(rows,events){const peak={};rows.forEach(r=>{const h=safe(r.Time).slice(0,2)+":00";peak[h]=(peak[h]||0)+Number(r.Sales||0)});const top=Object.entries(peak).sort((a,b)=>b[1]-a[1])[0]||["-",0];opsKpis.innerHTML=[card("Peak Hour",top[0],fmt(top[1])),card("Payment Events",events.filter(e=>safe(e.Type).toLowerCase().includes("payment")).length,"audit rows"),card("Stored Events",events.filter(e=>safe(e.After).toUpperCase()==="STORED").length,"status rows"),card("Tendered Events",events.filter(e=>safe(e.After).toUpperCase()==="TENDERED").length,"status rows"),card("Subtotaled Events",events.filter(e=>safe(e.After).toUpperCase()==="SUBTOTALED").length,"status rows"),card("Open Events",events.filter(e=>safe(e.After).toUpperCase()==="OPEN").length,"status rows")].join("");bars("funnelBars",["OPEN","STORED","SUBTOTALED","TENDERED"].map(x=>({Stage:x,Count:events.filter(e=>safe(e.After).toUpperCase()===x).length})),"Stage","Count",false)}
 function renderReplay(){const q=invoiceSearch.value.trim().toLowerCase();if(!q){replayBox.innerHTML="Search an invoice number to see its lifecycle.";return}const ev=(DATA.events||[]).filter(e=>safe(e.Invoice).toLowerCase().includes(q)).sort((a,b)=>safe(a.Time).localeCompare(safe(b.Time)));replayBox.innerHTML=ev.length?`<div class="timeline">${ev.map(e=>`<div class="timeline-item"><div class="timeline-time">${safe(e.Time)} · ${safe(e.Employee)}</div><div>${safe(e.Type)} ${safe(e.Product)?'· '+safe(e.Product):''}</div><div class="note">${safe(e.Before)} → ${safe(e.After)} ${e.Difference?fmt(e.Difference):''}</div></div>`).join("")}</div>`:"No invoice events found."}
 function invoiceLink(invoiceNo){
-  const inv = String(invoiceNo || "").replace(/'/g, "\\'");
-  return `<a href="#" onclick="openInvoiceInvestigation('${inv}');return false;" style="font-weight:700;color:#1d4ed8;text-decoration:none">${invoiceNo}</a>`;
+  const clean = String(invoiceNo || "").replace(/'/g,"\\'");
+  return '<a href="#" onclick="openInvoiceInvestigation(\\'' + clean + '\\');return false;" style="font-weight:700;color:#1d4ed8;text-decoration:none">' + invoiceNo + '</a>';
 }
-function renderRaw(rows,events){table("invoiceTable",["Invoice","Date","Time","Employee","SalesName","Order","Payment","Sales","Channel","AuditRows","Overrides","Cancels"],rows.map(r=>[invoiceLink(r["Invoice Number"]),r.Date,r.Time,r.Employee,r.SalesName,r.OrderNumber,r.PaymentMethod,fmt(r.Sales),`<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`,r.AuditRows,r.PriceOverrides,r.Cancellations]));table("eventTable",["Date","Time","Employee","Invoice","Order","Product","Type","Before","After","Difference","Risk"],events.slice(0,1500).map(e=>[e.Date,e.Time,e.Employee,invoiceLink(e.Invoice),e.Order,e.Product,e.Type,e.Before,e.After,e.Difference?fmt(e.Difference):"",e.Risk?`<span class="badge bad">${e.Risk}</span>`:""]))}
+function renderRaw(rows,events){
+  table("invoiceTable",["Invoice","Date","Time","Employee","SalesName","Order","Payment","Sales","Channel","AuditRows","Overrides","Cancels"],
+    rows.map(r=>[
+      invoiceLink(r["Invoice Number"]),
+      r.Date,
+      r.Time,
+      r.Employee,
+      r.SalesName,
+      r.OrderNumber,
+      r.PaymentMethod,
+      fmt(r.Sales),
+      `<span class="badge ${r.Channel==="Uber Orders"?"uber":"store"}">${r.Channel}</span>`,
+      r.AuditRows,
+      r.PriceOverrides,
+      r.Cancellations
+    ])
+  );
+  table("eventTable",["Date","Time","Employee","Invoice","Order","Product","Type","Before","After","Difference","Risk"],
+    events.slice(0,1500).map(e=>[
+      e.Date,
+      e.Time,
+      e.Employee,
+      invoiceLink(e.Invoice),
+      e.Order,
+      e.Product,
+      e.Type,
+      e.Before,
+      e.After,
+      e.Difference?fmt(e.Difference):"",
+      e.Risk?`<span class="badge bad">${e.Risk}</span>`:""
+    ])
+  );
+}
+function escHtml(v){
+  return String(v == null ? "" : v)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
 function openInvoiceInvestigation(invoiceNo){
   const invoice = (DATA.invoices || []).find(r => r["Invoice Number"] === invoiceNo) || {};
-  const events = (DATA.events || []).filter(e => e.Invoice === invoiceNo).sort((a,b) => safe(a.Time).localeCompare(safe(b.Time)));
-  const products = events.filter(e => safe(e.Type).toLowerCase().includes("add order items") && safe(e.Product)).map(e => e.Product);
+  const events = (DATA.events || [])
+    .filter(e => e.Invoice === invoiceNo)
+    .sort((a,b) => safe(a.Time).localeCompare(safe(b.Time)));
+
+  const products = events
+    .filter(e => safe(e.Type).toLowerCase().includes("add order items") && safe(e.Product))
+    .map(e => e.Product);
+
   const priceOverrides = events.filter(e => safe(e.Type).toLowerCase().includes("price override"));
   const removedItems = events.filter(e => safe(e.Type).toLowerCase().includes("remove"));
   const cancellations = events.filter(e => (safe(e.Type) + " " + safe(e.Risk)).toLowerCase().includes("cancel"));
   const paymentEvents = events.filter(e => safe(e.Type).toLowerCase().includes("payment") || safe(e.Type).toLowerCase().includes("charge customer"));
+
   const riskScore = Math.min(10, priceOverrides.length * 2 + removedItems.length + cancellations.length * 3);
   const riskLabel = riskScore >= 7 ? "High Risk" : riskScore >= 3 ? "Watch" : "Low Risk";
-  const riskClass = riskScore >= 7 ? "#991b1b" : riskScore >= 3 ? "#92400e" : "#166534";
-  const timelineRows = events.map(e => `<tr><td>${safe(e.Time)}</td><td>${safe(e.Employee)}</td><td>${safe(e.Type)}</td><td>${safe(e.Before)}</td><td>${safe(e.After)}</td><td>${safe(e.Product)}</td><td>${e.Difference ? fmt(e.Difference) : ""}</td><td>${safe(e["Authorized By"])}</td><td>${safe(e.Risk) ? `<span class="risk">${safe(e.Risk)}</span>` : ""}</td></tr>`).join("");
-  const productList = [...new Set(products)].map(p => `<li>${p}</li>`).join("") || "<li>No product items found from audit trail</li>";
-  const investigationHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Invoice ${invoiceNo}</title><style>body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:18px}.wrap{max-width:1200px;margin:auto}.header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:20px;border-radius:18px;margin-bottom:16px}h1{margin:0;font-size:24px}.muted{color:#6b7280;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}.label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}.value{font-size:22px;font-weight:800;margin-top:6px}table{border-collapse:collapse;width:100%;background:white;font-size:13px}th,td{border-bottom:1px solid #e5e7eb;padding:9px;text-align:left;white-space:nowrap}th{background:#f9fafb;text-transform:uppercase;font-size:12px;color:#4b5563}.table-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:white;-webkit-overflow-scrolling:touch}.risk{background:#fee2e2;color:#991b1b;border-radius:999px;padding:4px 8px;font-weight:700}@media(max-width:800px){body{padding:10px}.grid{grid-template-columns:1fr 1fr}.value{font-size:19px}table{min-width:950px;font-size:12px}.header{border-radius:14px}}@media(max-width:420px){.grid{grid-template-columns:1fr}}</style></head><body><div class="wrap"><div class="header"><h1>Invoice Investigation: ${invoiceNo}</h1><div style="margin-top:6px;color:#d1d5db">Full audit timeline, products, payment events and risk indicators</div></div><div class="grid"><div class="card"><div class="label">Sales Value</div><div class="value">${fmt(invoice.Sales)}</div></div><div class="card"><div class="label">Employee</div><div class="value">${safe(invoice.Employee) || "-"}</div></div><div class="card"><div class="label">Payment</div><div class="value">${safe(invoice.PaymentMethod) || "-"}</div></div><div class="card"><div class="label">Risk Score</div><div class="value" style="color:${riskClass}">${riskScore}/10</div><div class="muted">${riskLabel}</div></div></div><div class="grid"><div class="card"><div class="label">Price Overrides</div><div class="value">${priceOverrides.length}</div></div><div class="card"><div class="label">Removed Items</div><div class="value">${removedItems.length}</div></div><div class="card"><div class="label">Cancellations</div><div class="value">${cancellations.length}</div></div><div class="card"><div class="label">Payment Events</div><div class="value">${paymentEvents.length}</div></div></div><div class="card"><h2>Invoice Summary</h2><p><b>Order:</b> ${safe(invoice.OrderNumber) || "-"} &nbsp; | &nbsp; <b>Channel:</b> ${safe(invoice.Channel) || "-"} &nbsp; | &nbsp; <b>Sales Name:</b> ${safe(invoice.SalesName) || "-"}</p><p><b>Device:</b> ${safe(invoice.Device) || "-"} &nbsp; | &nbsp; <b>Audit Rows:</b> ${safe(invoice.AuditRows) || 0} &nbsp; | &nbsp; <b>Max Balance:</b> ${fmt(invoice.MaxBalance)}</p></div><div class="card"><h2>Products Added</h2><ul>${productList}</ul></div><div class="card"><h2>Timeline</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Employee</th><th>Type</th><th>Before</th><th>After</th><th>Product</th><th>Difference</th><th>Authorized By</th><th>Risk</th></tr></thead><tbody>${timelineRows || `<tr><td colspan="9">No audit events found for this invoice</td></tr>`}</tbody></table></div></div></div></body></html>`;
+  const riskColor = riskScore >= 7 ? "#991b1b" : riskScore >= 3 ? "#92400e" : "#166534";
+
+  const timelineRows = events.map(e => {
+    return "<tr>"
+      + "<td>" + escHtml(e.Time) + "</td>"
+      + "<td>" + escHtml(e.Employee) + "</td>"
+      + "<td>" + escHtml(e.Type) + "</td>"
+      + "<td>" + escHtml(e.Before) + "</td>"
+      + "<td>" + escHtml(e.After) + "</td>"
+      + "<td>" + escHtml(e.Product) + "</td>"
+      + "<td>" + (e.Difference ? escHtml(fmt(e.Difference)) : "") + "</td>"
+      + "<td>" + escHtml(e["Authorized By"]) + "</td>"
+      + "<td>" + (safe(e.Risk) ? '<span class="risk">' + escHtml(e.Risk) + '</span>' : "") + "</td>"
+      + "</tr>";
+  }).join("");
+
+  const productList = [...new Set(products)].map(p => "<li>" + escHtml(p) + "</li>").join("") || "<li>No product items found from audit trail</li>";
+
+  const doc = [];
+  doc.push("<!doctype html><html><head><meta charset='utf-8'>");
+  doc.push("<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>");
+  doc.push("<title>Invoice " + escHtml(invoiceNo) + "</title>");
+  doc.push("<style>");
+  doc.push("body{font-family:Arial,Helvetica,sans-serif;background:#f6f7fb;color:#111827;margin:0;padding:18px}.wrap{max-width:1200px;margin:auto}.header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:20px;border-radius:18px;margin-bottom:16px}h1{margin:0;font-size:24px}.muted{color:#6b7280;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}.label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}.value{font-size:22px;font-weight:800;margin-top:6px}table{border-collapse:collapse;width:100%;background:white;font-size:13px}th,td{border-bottom:1px solid #e5e7eb;padding:9px;text-align:left;white-space:nowrap}th{background:#f9fafb;text-transform:uppercase;font-size:12px;color:#4b5563}.table-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:white;-webkit-overflow-scrolling:touch}.risk{background:#fee2e2;color:#991b1b;border-radius:999px;padding:4px 8px;font-weight:700}@media(max-width:800px){body{padding:10px}.grid{grid-template-columns:1fr 1fr}.value{font-size:19px}table{min-width:950px;font-size:12px}.header{border-radius:14px}}@media(max-width:420px){.grid{grid-template-columns:1fr}}");
+  doc.push("</style></head><body><div class='wrap'>");
+  doc.push("<div class='header'><h1>Invoice Investigation: " + escHtml(invoiceNo) + "</h1><div style='margin-top:6px;color:#d1d5db'>Full audit timeline, products, payment events and risk indicators</div></div>");
+  doc.push("<div class='grid'>");
+  doc.push("<div class='card'><div class='label'>Sales Value</div><div class='value'>" + fmt(invoice.Sales) + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Employee</div><div class='value'>" + escHtml(invoice.Employee || "-") + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Payment</div><div class='value'>" + escHtml(invoice.PaymentMethod || "-") + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Risk Score</div><div class='value' style='color:" + riskColor + "'>" + riskScore + "/10</div><div class='muted'>" + riskLabel + "</div></div>");
+  doc.push("</div>");
+  doc.push("<div class='grid'>");
+  doc.push("<div class='card'><div class='label'>Price Overrides</div><div class='value'>" + priceOverrides.length + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Removed Items</div><div class='value'>" + removedItems.length + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Cancellations</div><div class='value'>" + cancellations.length + "</div></div>");
+  doc.push("<div class='card'><div class='label'>Payment Events</div><div class='value'>" + paymentEvents.length + "</div></div>");
+  doc.push("</div>");
+  doc.push("<div class='card'><h2>Invoice Summary</h2>");
+  doc.push("<p><b>Order:</b> " + escHtml(invoice.OrderNumber || "-") + " &nbsp; | &nbsp; <b>Channel:</b> " + escHtml(invoice.Channel || "-") + " &nbsp; | &nbsp; <b>Sales Name:</b> " + escHtml(invoice.SalesName || "-") + "</p>");
+  doc.push("<p><b>Device:</b> " + escHtml(invoice.Device || "-") + " &nbsp; | &nbsp; <b>Audit Rows:</b> " + escHtml(invoice.AuditRows || 0) + " &nbsp; | &nbsp; <b>Max Balance:</b> " + fmt(invoice.MaxBalance) + "</p>");
+  doc.push("</div>");
+  doc.push("<div class='card'><h2>Products Added</h2><ul>" + productList + "</ul></div>");
+  doc.push("<div class='card'><h2>Timeline</h2><div class='table-wrap'><table><thead><tr><th>Time</th><th>Employee</th><th>Type</th><th>Before</th><th>After</th><th>Product</th><th>Difference</th><th>Authorized By</th><th>Risk</th></tr></thead><tbody>" + (timelineRows || "<tr><td colspan='9'>No audit events found for this invoice</td></tr>") + "</tbody></table></div></div>");
+  doc.push("</div></body></html>");
+
   const win = window.open("", "_blank");
   if(!win){ alert("Popup blocked. Please allow popups for this site."); return; }
   win.document.open();
-  win.document.write(investigationHtml);
+  win.document.write(doc.join(""));
   win.document.close();
 }
 function render(){const rows=filteredInvoices(),events=filteredEvents();renderOverview(rows,events);renderRisks(events);renderEmployees(rows,events);renderOps(rows,events);renderRaw(rows,events);renderReplay()}
