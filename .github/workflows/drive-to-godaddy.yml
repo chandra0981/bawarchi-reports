@@ -1,10 +1,8 @@
 name: Refresh GAAP Dashboard from Google Drive and Deploy to GoDaddy
-
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 20 * * *"
-
 jobs:
   refresh-and-deploy:
     runs-on: ubuntu-latest
@@ -23,6 +21,8 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           DRIVE_PAYTYPE_FOLDER_ID: ${{ secrets.DRIVE_PAYTYPE_FOLDER_ID }}
           DRIVE_SALES_AUDIT_FOLDER_ID: ${{ secrets.DRIVE_SALES_AUDIT_FOLDER_ID }}
+          DRIVE_DEPARTMENT_SALES_FOLDER_ID: ${{ secrets.DRIVE_DEPARTMENT_SALES_FOLDER_ID }}
+          DRIVE_PURCHASE_REPORT_FOLDER_ID: ${{ secrets.DRIVE_PURCHASE_REPORT_FOLDER_ID }}
       - name: Deploy dashboard to GoDaddy by FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
