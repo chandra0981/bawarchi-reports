@@ -70,45 +70,18 @@ function parsePurchase(file,fp){
   const rows=read(fp,8),out=[];let dept="";
   for(const row of rows){
     const m=mapRow(row);
-
-    // Department header can appear in the Date column or Product Name column depending on GAAP export.
-    const possibleHeader=String(m["date"]||m["product name"]||"").trim();
-    if(possibleHeader.toLowerCase().startsWith("dept lvl 1:")){
-      dept=possibleHeader.replace(/^Dept Lvl 1:\s*/i,"").replace(/\s*\(Total:.*?\)\s*$/i,"").trim();
+    const header=String(m["date"]||m["product name"]||"").trim();
+    if(header.toLowerCase().startsWith("dept lvl 1:")){
+      dept=header.replace(/^Dept Lvl 1:\s*/i,"").replace(/\s*\(Total:.*?\)\s*$/i,"").trim();
       continue;
     }
-
     const product=String(m["product name"]||"").trim();
-    if(!product || product.toLowerCase()==="product name") continue;
-
+    if(!product||product.toLowerCase()==="product name")continue;
     const date=dateValue(m["date"],parseDateFromFilename(file.name));
-    if(!date) continue;
-
-    const baseQty=toNumber(m["base qty"]);
-    const purchaseQty=toNumber(m["purchase qty"]);
-    const value=toNumber(m["value"]);
-    const tax=toNumber(m["tax"]);
-    const total=toNumber(m["total"]);
-    const supplier=String(m["supplier"]||"").trim();
-
-    if(!baseQty && !purchaseQty && !value && !tax && !total) continue;
-
-    out.push({
-      source_file:file.name,
-      Date:date,
-      Department:dept||"Unmapped",
-      Product:product,
-      BaseUOM:String(m["base uom"]||"").trim(),
-      BaseQty:baseQty,
-      PurchaseUOM:String(m["purchase uom"]||"").trim(),
-      PurchaseQty:purchaseQty,
-      AverageCost:toNumber(m["average cost"]),
-      LastCost:toNumber(m["last cost"]),
-      Value:value,
-      Tax:tax,
-      Total:total,
-      Supplier:supplier||"Unknown"
-    });
+    if(!date)continue;
+    const baseQty=toNumber(m["base qty"]), purchaseQty=toNumber(m["purchase qty"]), value=toNumber(m["value"]), tax=toNumber(m["tax"]), total=toNumber(m["total"]);
+    if(!baseQty&&!purchaseQty&&!value&&!tax&&!total)continue;
+    out.push({source_file:file.name,Date:date,Department:dept||"Unmapped",Product:product,BaseUOM:String(m["base uom"]||"").trim(),BaseQty:baseQty,PurchaseUOM:String(m["purchase uom"]||"").trim(),PurchaseQty:purchaseQty,AverageCost:toNumber(m["average cost"]),LastCost:toNumber(m["last cost"]),Value:value,Tax:tax,Total:total,Supplier:String(m["supplier"]||"").trim()||"Unknown"});
   }
   return out;
 }
