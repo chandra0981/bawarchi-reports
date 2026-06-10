@@ -72,26 +72,62 @@ function parseDepartment(file,fp){
 
 function parsePurchase(file,fp){
   const fd=parseDateFromFilename(file.name),out=[];
-  for(const row of read(fp,8)){
-    const m=mapRow(row);
-    const supplier=String(val(m,["supplier","supplier name","creditor","vendor","account name","name"])).trim();
-    const item=String(val(m,["product name","product","item","description","stock item","inventory item"])).trim();
-    const ref=String(val(m,["reference","invoice number","document number","doc no","supplier invoice","grv number","order number"])).trim();
-    const rawDate=val(m,["date","invoice date","document date","transaction date"]);
-    const date=dateValue(rawDate,fd);
-    const qty=toNumber(val(m,["qty","quantity","received qty","purchased qty","order qty"]));
-    const unit=toNumber(val(m,["unit price","price","cost price","unit cost","exclusive price"]));
-    const vat=toNumber(val(m,["vat","tax","vat amount","tax amount"]));
-    let amount=toNumber(val(m,["total incl","total inclusive","inclusive","amount incl","total","amount","debit","gross"]));
-    const ex=toNumber(val(m,["total excl","exclusive","amount excl","net","nett"]));
-    if(!amount && ex) amount=ex+vat;
-    if(!amount && qty && unit) amount=qty*unit+vat;
-    if(!date && !supplier && !item && !amount) continue;
-    if(String(supplier+item+ref).toLowerCase().includes("supplier") && !amount) continue;
-    const category=String(val(m,["category","department","group","stock group","expense category"])).trim()||categoryFromItem(item||supplier);
-    out.push({source_file:file.name,Date:date,Supplier:supplier||"Unknown",Category:category,Item:item||String(val(m,["description"])).trim()||"Purchase",Qty:qty,UnitPrice:unit,Amount:amount,Vat:vat,Reference:ref,InvoiceNumber:String(val(m,["invoice number","supplier invoice"])).trim(),PaymentMethod:String(val(m,["payment method","payment","tender"])).trim(),Notes:String(val(m,["notes","memo","comment"])).trim()});
+  const wb=XLSX.readFile(fp,{cellDates:true});
+  const sheet=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:"",raw:true});
+  // PurchaseReport layout:
+  // rows 1-8  = report title / filters / blank metadata
+  // row 9     = real column headers: Date, Product Name, Base UOM, Base Qty, Purchase UOM, Purchase Qty, Average Cost, Last Cost, Value, Tax, Total, Supplier
+  // row 10    = secondary supplier header row, so actual useful rows start after the first 10 rows
+  let currentDepartment="Unmapped";
+  for(const r of rows.slice(10)){
+    const first=String(r[0]||"").trim();
+    if(!first && !r.some(x=>String(x||"").trim())) continue;
+    if(/^Dept Lvl 1:/i.test(first)){
+      currentDepartment=first.replace(/^Dept Lvl 1:\s*/i,"").split("(")[0].trim()||"Unmapped";
+      continue;
+    }
+    const date=dateValue(r[0],fd);
+    // Only accept real transaction rows with a valid date. This removes subtotals, blanks, and grand totals.
+    if(!date) continue;
+    const product=String(r[1]||"").trim()||"Purchase";
+    const supplier=String(r[11]||"").trim()||"Unknown";
+    const baseQty=toNumber(r[3]);
+    const purchaseQty=toNumber(r[5]);
+    const avgCost=toNumber(r[6]);
+    const lastCost=toNumber(r[7]);
+    const value=toNumber(r[8]);
+    const tax=toNumber(r[9]);
+    const total=toNumber(r[10]) || (value+tax);
+    out.push({
+      source_file:file.name,
+      Date:date,
+      Department:currentDepartment,
+      Category:currentDepartment,
+      Product:product,
+      Item:product,
+      BaseUOM:String(r[2]||"").trim(),
+      BaseQty:baseQty,
+      PurchaseUOM:String(r[4]||"").trim(),
+      PurchaseQty:purchaseQty,
+      Qty:purchaseQty||baseQty,
+      AverageCost:avgCost,
+      AvgCost:avgCost,
+      LastCost:lastCost,
+      UnitPrice:lastCost||avgCost,
+      Value:value,
+      Tax:tax,
+      Vat:tax,
+      Total:total,
+      Amount:total,
+      Supplier:supplier,
+      Reference:"",
+      InvoiceNumber:"",
+      PaymentMethod:"",
+      Notes:""
+    });
   }
-  return out.filter(r=>r.Date||r.Amount||r.Supplier!=="Unknown"||r.Item!=="Purchase");
+  return out;
 }
 function purchaseKpi(rows){return{purchase_total:rows.reduce((a,r)=>a+Number(r.Amount||0),0),purchase_rows:rows.length,purchase_vat:rows.reduce((a,r)=>a+Number(r.Vat||0),0),purchase_suppliers:new Set(rows.map(r=>r.Supplier).filter(Boolean)).size,purchase_categories:new Set(rows.map(r=>r.Category).filter(Boolean)).size}}
 
