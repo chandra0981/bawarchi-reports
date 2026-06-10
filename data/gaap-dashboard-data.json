@@ -3,5 +3,7 @@
   "files": [],
   "kpi": {},
   "invoices": [],
-  "events": []
+  "events": [],
+  "department_sales": [],
+  "department_timed": []
 }
