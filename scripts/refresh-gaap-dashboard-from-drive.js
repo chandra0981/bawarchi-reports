@@ -70,24 +70,29 @@ function parsePurchase(file,fp){
   const rows=read(fp,8),out=[];let dept="";
   for(const row of rows){
     const m=mapRow(row);
-    const maybeDept=String(m["date"]||m["product name"]||"").trim();
-    if(maybeDept.toLowerCase().startsWith("dept lvl 1:")){
-      dept=maybeDept.replace(/^Dept Lvl 1:\s*/i,"").replace(/\s*\(Total:.*?\)\s*$/i,"").trim();
+
+    // Department header can appear in the Date column or Product Name column depending on GAAP export.
+    const possibleHeader=String(m["date"]||m["product name"]||"").trim();
+    if(possibleHeader.toLowerCase().startsWith("dept lvl 1:")){
+      dept=possibleHeader.replace(/^Dept Lvl 1:\s*/i,"").replace(/\s*\(Total:.*?\)\s*$/i,"").trim();
       continue;
     }
+
     const product=String(m["product name"]||"").trim();
-    if(!product||product.toLowerCase()==="product name") continue;
+    if(!product || product.toLowerCase()==="product name") continue;
+
     const date=dateValue(m["date"],parseDateFromFilename(file.name));
     if(!date) continue;
-    const total=toNumber(m["total"]);
-    const value=toNumber(m["value"]);
-    const tax=toNumber(m["tax"]);
+
     const baseQty=toNumber(m["base qty"]);
     const purchaseQty=toNumber(m["purchase qty"]);
-    const avgCost=toNumber(m["average cost"]);
-    const lastCost=toNumber(m["last cost"]);
+    const value=toNumber(m["value"]);
+    const tax=toNumber(m["tax"]);
+    const total=toNumber(m["total"]);
     const supplier=String(m["supplier"]||"").trim();
-    if(!total&&!value&&!baseQty&&!purchaseQty) continue;
+
+    if(!baseQty && !purchaseQty && !value && !tax && !total) continue;
+
     out.push({
       source_file:file.name,
       Date:date,
@@ -97,8 +102,8 @@ function parsePurchase(file,fp){
       BaseQty:baseQty,
       PurchaseUOM:String(m["purchase uom"]||"").trim(),
       PurchaseQty:purchaseQty,
-      AverageCost:avgCost,
-      LastCost:lastCost,
+      AverageCost:toNumber(m["average cost"]),
+      LastCost:toNumber(m["last cost"]),
       Value:value,
       Tax:tax,
       Total:total,
