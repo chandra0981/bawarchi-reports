@@ -58,6 +58,11 @@ header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:22
     <div class="card"><h2>Category Spend</h2><div id="purchaseCategoryBars"></div></div>
   </div>
   <div class="card">
+    <h2>Food Cost / GP by Department</h2>
+    <p class="note">Compares Department Sales Report totals with Purchase Report department totals. Exact department names are matched first; unmapped purchase departments still show so you can reconcile them.</p>
+    <div class="table-wrap"><table id="purchaseGpTable"></table></div>
+  </div>
+  <div class="card">
     <h2>Purchase Summary</h2>
     <div class="table-wrap"><table id="purchaseSummaryTable"></table></div>
   </div>
@@ -125,13 +130,22 @@ function filteredPurchaseRows(){
 function renderPurchases(){
   if(!document.getElementById("purchaseKpis")) return;
   const rows=filteredPurchaseRows();
-  const total=rows.reduce((s,r)=>s+Number(r.Amount||0),0), vat=rows.reduce((s,r)=>s+Number(r.Vat||0),0), qty=rows.reduce((s,r)=>s+Number(r.Qty||0),0);
-  purchaseKpis.innerHTML=[card("Total Purchases",fmt(total),`${rows.length} rows`),card("VAT",fmt(vat),"captured"),card("Net / Ex VAT",fmt(total-vat),"estimated"),card("Suppliers",new Set(rows.map(r=>r.Supplier).filter(Boolean)).size,"loaded"),card("Categories",new Set(rows.map(r=>r.Category).filter(Boolean)).size,"loaded"),card("Quantity",num(qty),"units")].join("");
-  bars("supplierBars",rows,"Supplier","Amount",true);
-  bars("purchaseCategoryBars",rows,"Category","Amount",true);
-  const bySupplier={}; rows.forEach(r=>{const k=r.Supplier||"Unknown";bySupplier[k]=bySupplier[k]||{amount:0,vat:0,qty:0,rows:0};bySupplier[k].amount+=Number(r.Amount||0);bySupplier[k].vat+=Number(r.Vat||0);bySupplier[k].qty+=Number(r.Qty||0);bySupplier[k].rows++;});
+  const total=rows.reduce((s,r)=>s+Number(r.Amount||r.Total||0),0), vat=rows.reduce((s,r)=>s+Number(r.Vat||r.Tax||0),0), qty=rows.reduce((s,r)=>s+Number(r.Qty||r.PurchaseQty||0),0);
+  purchaseKpis.innerHTML=[card("Total Purchases",fmt(total),`${rows.length} rows`),card("VAT",fmt(vat),"captured"),card("Net / Ex VAT",fmt(total-vat),"estimated"),card("Suppliers",new Set(rows.map(r=>r.Supplier).filter(Boolean)).size,"loaded"),card("Departments",new Set(rows.map(r=>r.Department||r.Category).filter(Boolean)).size,"loaded"),card("Quantity",num(qty),"units")].join("");
+  bars("supplierBars",rows.map(r=>({...r,Amount:Number(r.Amount||r.Total||0)})),"Supplier","Amount",true);
+  bars("purchaseCategoryBars",rows.map(r=>({...r,Category:r.Department||r.Category,Amount:Number(r.Amount||r.Total||0)})),"Category","Amount",true);
+
+  const bySupplier={}; rows.forEach(r=>{const k=r.Supplier||"Unknown";bySupplier[k]=bySupplier[k]||{amount:0,vat:0,qty:0,rows:0};bySupplier[k].amount+=Number(r.Amount||r.Total||0);bySupplier[k].vat+=Number(r.Vat||r.Tax||0);bySupplier[k].qty+=Number(r.Qty||r.PurchaseQty||0);bySupplier[k].rows++;});
   table("purchaseSummaryTable",["Supplier","Rows","Qty","Amount","VAT","Avg / Row"],Object.entries(bySupplier).sort((a,b)=>b[1].amount-a[1].amount).map(([s,v])=>[s,v.rows,Number(v.qty||0).toFixed(2),fmt(v.amount),fmt(v.vat),fmt(v.rows?v.amount/v.rows:0)]));
-  table("purchaseDetailTable",["Date","Supplier","Category","Item","Qty","Unit","Amount","VAT","Reference","Payment","File"],rows.sort((a,b)=>String(a.Date).localeCompare(String(b.Date))).slice(0,2500).map(r=>[r.Date,r.Supplier,r.Category,r.Item,Number(r.Qty||0).toFixed(2),fmt(r.UnitPrice),fmt(r.Amount),fmt(r.Vat),r.Reference||r.InvoiceNumber,r.PaymentMethod,r.source_file]));
+
+  const salesRows=filteredDepartmentRows();
+  const salesByDept={}, purchByDept={};
+  salesRows.forEach(r=>{const k=r.Department||"Unmapped";salesByDept[k]=(salesByDept[k]||0)+Number(r.Sales||0)});
+  rows.forEach(r=>{const k=r.Department||r.Category||"Unmapped";purchByDept[k]=(purchByDept[k]||0)+Number(r.Amount||r.Total||0)});
+  const gpDepts=[...new Set([...Object.keys(salesByDept),...Object.keys(purchByDept)])];
+  table("purchaseGpTable",["Department","Sales","Purchases","GP","GP %"],gpDepts.sort((a,b)=>(purchByDept[b]||0)-(purchByDept[a]||0)).map(d=>{const sales=salesByDept[d]||0,purch=purchByDept[d]||0,gp=sales-purch,gpp=sales?(gp/sales*100):0;return [d,fmt(sales),fmt(purch),fmt(gp),sales?gpp.toFixed(1)+"%":"-"];}));
+
+  table("purchaseDetailTable",["Date","Department","Supplier","Product","Base Qty","Purchase Qty","Avg Cost","Last Cost","Value","Tax","Total","File"],rows.sort((a,b)=>String(a.Date).localeCompare(String(b.Date))).slice(0,2500).map(r=>[r.Date,r.Department||r.Category,r.Supplier,r.Product||r.Item,Number(r.BaseQty||0).toFixed(2),Number(r.PurchaseQty||r.Qty||0).toFixed(2),fmt(r.AverageCost||r.AvgCost),fmt(r.LastCost||r.UnitPrice),fmt(r.Value),fmt(r.Tax||r.Vat),fmt(r.Total||r.Amount),r.source_file]));
 }
 
 function render(){const rows=filteredInvoices(),events=filteredEvents();renderOverview(rows,events);renderRisks(events);renderEmployees(rows,events);renderOps(rows,events);renderRaw(rows,events);renderDepartments();renderPurchases();renderReplay()}
