@@ -18,7 +18,7 @@ header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:22
 <div id="loginScreen" class="login"><div class="login-card"><h1>Bawarchi Reports</h1><p>Secure management dashboard</p><label>Username</label><input id="loginUser" value="admin"><label>Password</label><input id="loginPass" type="password"><button onclick="login()">Login</button><div id="loginError" style="color:#991b1b;font-weight:700"></div></div></div>
 <div id="app" style="display:none"><header><button class="top-actions" onclick="logout()">Logout</button><h1>Bawarchi Management Dashboard V2</h1><p>Sales · Employees · Audit Risks · Invoice Replay</p><div id="status" class="status">Loading...</div></header>
 <div class="container"><div class="card"><div class="controls"><select id="dateFilter"><option>All Dates</option></select><select id="channelFilter"><option>All</option><option>Uber Orders</option><option>Non-Uber / Store</option></select><select id="employeeFilter"><option>All Employees</option></select><input id="searchBox" placeholder="Search invoice, order, employee, item..."><button onclick="resetFilters()">Reset</button></div></div>
-<div class="tabs"><button class="active" onclick="showTab('overview',this)">Overview</button><button onclick="showTab('risks',this)">Audit Risks</button><button onclick="showTab('employees',this)">Employees</button><button onclick="showTab('replay',this)">Invoice Replay</button><button onclick="showTab('operations',this)">Operations</button><button onclick="showTab('departments',this)">Departments</button><button onclick="showTab('raw',this)">Raw Data</button></div>
+<div class="tabs"><button class="active" onclick="showTab('overview',this)">Overview</button><button onclick="showTab('risks',this)">Audit Risks</button><button onclick="showTab('employees',this)">Employees</button><button onclick="showTab('replay',this)">Invoice Replay</button><button onclick="showTab('operations',this)">Operations</button><button onclick="showTab('departments',this)">Departments</button><button onclick="showTab('purchases',this)">Purchases</button><button onclick="showTab('raw',this)">Raw Data</button></div>
 <section id="overview" class="tab active"><div class="grid kpis" id="kpis"></div><div class="grid cards2"><div class="card"><h2>Employee Sales</h2><div id="empBars"></div></div><div class="card"><h2>Payment Split</h2><div id="payBars"></div></div></div><div class="grid cards2"><div class="card"><h2>Hourly Sales</h2><div id="hourBars"></div></div><div class="card"><h2>Top Products</h2><div id="prodBars"></div></div></div></section>
 <section id="risks" class="tab"><div class="grid kpis" id="riskKpis"></div><div class="card"><h2>Audit Risk Register</h2><div class="table-wrap"><table id="riskTable"></table></div></div></section>
 <section id="employees" class="tab"><div class="card"><h2>Employee Performance + Risk</h2><div class="table-wrap"><table id="employeeTable"></table></div></div></section>
@@ -43,6 +43,30 @@ header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:22
     <div class="table-wrap"><table id="deptDetailTable"></table></div>
   </div>
 </section>
+<section id="purchases" class="tab">
+  <div class="grid kpis" id="purchaseKpis"></div>
+  <div class="card">
+    <h2>Purchase Filters</h2>
+    <div class="controls">
+      <select id="purchaseDeptFilter"><option>All Purchase Departments</option></select>
+      <select id="supplierFilter"><option>All Suppliers</option></select>
+      <button onclick="printPurchaseReport()">🖨 Print Purchase Report</button>
+    </div>
+  </div>
+  <div class="grid cards2">
+    <div class="card"><h2>Purchases by Department</h2><div class="table-wrap"><table id="purchaseDeptTable"></table></div></div>
+    <div class="card"><h2>Purchases by Supplier</h2><div class="table-wrap"><table id="purchaseSupplierTable"></table></div></div>
+  </div>
+  <div class="grid cards2">
+    <div class="card"><h2>Purchases by Product</h2><div class="table-wrap"><table id="purchaseProductTable"></table></div></div>
+    <div class="card"><h2>Purchases vs Sales by Date</h2><div class="table-wrap"><table id="purchaseVsSalesTable"></table></div></div>
+  </div>
+  <div class="card">
+    <h2>Purchase Detail</h2>
+    <p class="note">Uses the same date dropdown: All Dates, Week To Date, Month To Date, or a specific date.</p>
+    <div class="table-wrap"><table id="purchaseDetailTable"></table></div>
+  </div>
+</section>
 <section id="raw" class="tab"><div class="card"><h2>Invoice-Level Reconciliation</h2><div class="table-wrap"><table id="invoiceTable"></table></div></div><div class="card"><h2>Audit Trail Events</h2><div class="table-wrap"><table id="eventTable"></table></div></div></section></div><div class="footer" id="footer"></div></div>
 <script>
 const ADMIN_USER="admin",ADMIN_PASS="Bawarchi!@#25";let DATA={invoices:[],events:[]};const fmt=n=>"R "+Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2}),num=n=>Number(n||0).toLocaleString("en-ZA",{maximumFractionDigits:0}),safe=v=>v==null?"":String(v);
@@ -63,7 +87,7 @@ function dateInRange(rowDate, selected){
   }
   return rowDate===selected;
 }
-function filters(){return{date:dateFilter.value,ch:channelFilter.value,emp:employeeFilter.value,q:searchBox.value.trim().toLowerCase(),dept:(document.getElementById("departmentFilter")?departmentFilter.value:"All Departments"),deptCh:(document.getElementById("deptChannelFilter")?deptChannelFilter.value:"All Channels")}}function filteredInvoices(){const f=filters();return(DATA.invoices||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.ch==="All"||r.Channel===f.ch)&&(f.emp==="All Employees"||r.Employee===f.emp)&&(!f.q||[r["Invoice Number"],r.OrderNumber,r.Employee,r.SalesName,r.PaymentMethod,r.Channel,r.Device].map(safe).join(" ").toLowerCase().includes(f.q)))}function filteredEvents(){const f=filters();return(DATA.events||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.ch==="All"||r.Channel===f.ch)&&(f.emp==="All Employees"||r.Employee===f.emp)&&(!f.q||[r.Invoice,r.Order,r.Employee,r["Sales Name"],r.Product,r.Type,r.Device,r.Risk].map(safe).join(" ").toLowerCase().includes(f.q)))}
+function filters(){return{date:dateFilter.value,ch:channelFilter.value,emp:employeeFilter.value,q:searchBox.value.trim().toLowerCase(),dept:(document.getElementById("departmentFilter")?departmentFilter.value:"All Departments"),deptCh:(document.getElementById("deptChannelFilter")?deptChannelFilter.value:"All Channels"),pdept:(document.getElementById("purchaseDeptFilter")?purchaseDeptFilter.value:"All Purchase Departments"),supplier:(document.getElementById("supplierFilter")?supplierFilter.value:"All Suppliers")}}function filteredInvoices(){const f=filters();return(DATA.invoices||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.ch==="All"||r.Channel===f.ch)&&(f.emp==="All Employees"||r.Employee===f.emp)&&(!f.q||[r["Invoice Number"],r.OrderNumber,r.Employee,r.SalesName,r.PaymentMethod,r.Channel,r.Device].map(safe).join(" ").toLowerCase().includes(f.q)))}function filteredEvents(){const f=filters();return(DATA.events||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.ch==="All"||r.Channel===f.ch)&&(f.emp==="All Employees"||r.Employee===f.emp)&&(!f.q||[r.Invoice,r.Order,r.Employee,r["Sales Name"],r.Product,r.Type,r.Device,r.Risk].map(safe).join(" ").toLowerCase().includes(f.q)))}
 function calc(rows,events){const u=rows.filter(r=>r.Channel==="Uber Orders"),s=rows.filter(r=>r.Channel!=="Uber Orders"),total=rows.reduce((a,r)=>a+Number(r.Sales||0),0),risk=events.filter(e=>safe(e.Risk));const health=Math.max(0,100-risk.length*2-events.filter(e=>safe(e.Type).toLowerCase().includes("price override")).length*3);return{total,orders:new Set(rows.map(r=>r["Invoice Number"])).size,avg:rows.length?total/rows.length:0,uberSales:u.reduce((a,r)=>a+Number(r.Sales||0),0),storeSales:s.reduce((a,r)=>a+Number(r.Sales||0),0),uberOrders:u.length,storeOrders:s.length,auditRows:events.length,risks:risk.length,health}}
 function card(a,b,c){return`<div class="card"><div class="label">${a}</div><div class="value">${b}</div><div class="sub">${c}</div></div>`}function renderKpis(rows,events){const k=calc(rows,events);kpis.innerHTML=[card("Total Sales",fmt(k.total),`${k.orders} invoices`),card("Uber Orders",fmt(k.uberSales),`${k.uberOrders} invoices`),card("Store Sales",fmt(k.storeSales),`${k.storeOrders} invoices`),card("Avg Bill",fmt(k.avg),"per invoice"),card("Audit Events",num(k.auditRows),"rows loaded"),card("Health Score",num(k.health)+"/100",k.health>=85?"Good":k.health>=65?"Watch":"Investigate")].join("")}
 function bars(id,rows,label,value,money=true){const m={};rows.forEach(r=>{const k=safe(r[label])||"Unknown";m[k]=(m[k]||0)+Number(r[value]||0)});const a=Object.entries(m).sort((x,y)=>y[1]-x[1]).slice(0,12),mx=Math.max(...a.map(x=>x[1]),1);document.getElementById(id).innerHTML=a.map(([l,v])=>`<div class="bar-row"><div class="bar-label" title="${l}">${l}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/mx*100).toFixed(1)}%"></div></div><div class="bar-val">${money?fmt(v):num(v)}</div></div>`).join("")||"<div class='note'>No data</div>"}
@@ -90,8 +114,127 @@ function renderDepartments(){
   table("deptDetailTable",["Date","Time","Hour","Department","Item","Qty","Sales","Channel","Invoice","Order","Employee"],rows.sort((a,b)=>String(a.Date+a.Time).localeCompare(String(b.Date+b.Time))).slice(0,2000).map(r=>[r.Date,r.Time,r.Hour,r.Department,r.Product,Number(r.Qty||0).toFixed(2),fmt(r.Sales),r.Channel,r.Invoice,r.Order,r.Employee]));
 }
 
-function render(){const rows=filteredInvoices(),events=filteredEvents();renderOverview(rows,events);renderRisks(events);renderEmployees(rows,events);renderOps(rows,events);renderRaw(rows,events);renderDepartments();renderReplay()}
-function resetFilters(){dateFilter.value="All Dates";channelFilter.value="All";employeeFilter.value="All Employees";searchBox.value="";render()}
-function populateFilters(){dateFilter.innerHTML="<option>All Dates</option><option>Week To Date</option><option>Month To Date</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Date).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");employeeFilter.innerHTML="<option>All Employees</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Employee).filter(Boolean))].sort().map(e=>`<option>${e}</option>`).join(""); if(document.getElementById("departmentFilter")){departmentFilter.innerHTML="<option>All Departments</option>"+[...new Set((DATA.department_timed||DATA.department_sales||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join(""); deptChannelFilter.innerHTML="<option>All Channels</option>"+[...new Set((DATA.department_timed||[]).map(r=>r.Channel).filter(Boolean))].sort().map(c=>`<option>${c}</option>`).join("");}}
-function loadData(){fetch("data/gaap-dashboard-data.json?ts="+Date.now()).then(r=>r.json()).then(d=>{DATA=d;status.textContent="Last refresh: "+(DATA.generated_at||"unknown")+" · Files: "+((DATA.files||[]).map(f=>f.name).join(", ")||"none");populateFilters();["dateFilter","channelFilter","employeeFilter","searchBox","departmentFilter","deptChannelFilter"].forEach(id=>{document.getElementById(id).addEventListener("change",render);document.getElementById(id).addEventListener("input",render)});render()}).catch(e=>{status.textContent="Could not load data/gaap-dashboard-data.json";console.error(e)})}
+
+function filteredPurchases(){
+  const f=filters();
+  return (DATA.purchases||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.pdept==="All Purchase Departments"||r.Department===f.pdept)&&(f.supplier==="All Suppliers"||r.Supplier===f.supplier)&&(!f.q||[r.Department,r.Product,r.Supplier,r.BaseUOM,r.PurchaseUOM].map(safe).join(" ").toLowerCase().includes(f.q)));
+}
+function aggregateRows(rows,keyFn){
+  const m={};
+  rows.forEach(r=>{
+    const k=keyFn(r)||"Unknown";
+    m[k]=m[k]||{qty:0,total:0,value:0,tax:0,count:0};
+    m[k].qty+=Number(r.PurchaseQty||r.BaseQty||0);
+    m[k].total+=Number(r.Total||0);
+    m[k].value+=Number(r.Value||0);
+    m[k].tax+=Number(r.Tax||0);
+    m[k].count++;
+  });
+  return Object.entries(m).sort((a,b)=>b[1].total-a[1].total);
+}
+function renderPurchases(){
+  if(!document.getElementById("purchaseKpis")) return;
+  const rows=filteredPurchases();
+  const total=rows.reduce((s,r)=>s+Number(r.Total||0),0);
+  const value=rows.reduce((s,r)=>s+Number(r.Value||0),0);
+  const tax=rows.reduce((s,r)=>s+Number(r.Tax||0),0);
+  const salesRows=filteredInvoices();
+  const sales=salesRows.reduce((s,r)=>s+Number(r.Sales||0),0);
+  const purchasePct=sales?((total/sales)*100).toFixed(1)+"%":"-";
+
+  purchaseKpis.innerHTML=[
+    card("Total Purchases",fmt(total),`${rows.length} purchase rows`),
+    card("Purchase Value",fmt(value),"ex VAT"),
+    card("VAT",fmt(tax),"tax"),
+    card("Suppliers",new Set(rows.map(r=>r.Supplier)).size,"suppliers"),
+    card("Products",new Set(rows.map(r=>r.Product)).size,"items"),
+    card("Purchase % Sales",purchasePct,`Sales ${fmt(sales)}`)
+  ].join("");
+
+  table("purchaseDeptTable",["Department","Rows","Qty","Value","Tax","Total"],aggregateRows(rows,r=>r.Department).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
+  table("purchaseSupplierTable",["Supplier","Rows","Qty","Value","Tax","Total"],aggregateRows(rows,r=>r.Supplier).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
+  table("purchaseProductTable",["Product","Rows","Qty","UOM","Avg Cost","Total"],aggregateRows(rows,r=>r.Product).slice(0,80).map(([k,v])=>{const sample=rows.find(r=>r.Product===k)||{};return[k,v.count,v.qty.toFixed(2),sample.PurchaseUOM||sample.BaseUOM||"",fmt(v.qty?v.total/v.qty:0),fmt(v.total)]}));
+
+  const byDate={};
+  rows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].purchases+=Number(r.Total||0)});
+  salesRows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].sales+=Number(r.Sales||0)});
+  table("purchaseVsSalesTable",["Date","Sales","Purchases","Purchase %"],Object.entries(byDate).sort().map(([d,v])=>[d,fmt(v.sales||0),fmt(v.purchases||0),(v.sales?((v.purchases/v.sales)*100).toFixed(1)+"%":"-")]));
+
+  table("purchaseDetailTable",["Date","Department","Product","Supplier","Base Qty","Base UOM","Purchase Qty","Purchase UOM","Avg Cost","Last Cost","Value","Tax","Total"],rows.sort((a,b)=>String(a.Date).localeCompare(String(b.Date))).slice(0,2000).map(r=>[r.Date,r.Department,r.Product,r.Supplier,Number(r.BaseQty||0).toFixed(2),r.BaseUOM,Number(r.PurchaseQty||0).toFixed(2),r.PurchaseUOM,fmt(r.AverageCost),fmt(r.LastCost),fmt(r.Value),fmt(r.Tax),fmt(r.Total)]));
+}
+function htmlEscapePrint(v){
+  return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+function printPurchaseReport(){
+  const rows=filteredPurchases();
+  const f=filters();
+  const total=rows.reduce((s,r)=>s+Number(r.Total||0),0);
+  const value=rows.reduce((s,r)=>s+Number(r.Value||0),0);
+  const tax=rows.reduce((s,r)=>s+Number(r.Tax||0),0);
+  const byProduct=aggregateRows(rows,r=>r.Product).slice(0,150);
+  const detail=rows.sort((a,b)=>String(a.Date+a.Department+a.Product).localeCompare(String(b.Date+b.Department+b.Product))).slice(0,2500);
+
+  let productRows="";
+  byProduct.forEach(([k,v])=>{
+    productRows += "<tr><td>"+htmlEscapePrint(k)+"</td><td>"+v.count+"</td><td>"+v.qty.toFixed(2)+"</td><td>"+fmt(v.total)+"</td></tr>";
+  });
+
+  let detailRows="";
+  detail.forEach(r=>{
+    detailRows += "<tr>"
+      + "<td>"+htmlEscapePrint(r.Date)+"</td>"
+      + "<td>"+htmlEscapePrint(r.Department)+"</td>"
+      + "<td>"+htmlEscapePrint(r.Product)+"</td>"
+      + "<td>"+htmlEscapePrint(r.Supplier)+"</td>"
+      + "<td>"+Number(r.PurchaseQty||r.BaseQty||0).toFixed(2)+"</td>"
+      + "<td>"+htmlEscapePrint(r.PurchaseUOM||r.BaseUOM||"")+"</td>"
+      + "<td>"+fmt(r.Total)+"</td>"
+      + "</tr>";
+  });
+
+  const css = "body{font-family:Arial;margin:24px;color:#111827}h1{margin:0 0 8px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:14px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f3f4f6}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.pcard{border:1px solid #ddd;padding:10px;border-radius:10px}.label{font-size:11px;color:#666}.value{font-size:20px;font-weight:700}@media print{button{display:none}.pagebreak{page-break-before:always}}";
+
+  const parts=[];
+  parts.push("<!doctype html><html><head><meta charset='utf-8'><title>Bawarchi Purchase Report</title><style>");
+  parts.push(css);
+  parts.push("</style></head><body>");
+  parts.push("<button onclick='window.print()'>Print</button>");
+  parts.push("<h1>BAWARCHI PURCHASE REPORT</h1>");
+  parts.push("<div>Date Filter: "+htmlEscapePrint(f.date)+" | Department: "+htmlEscapePrint(f.pdept)+" | Supplier: "+htmlEscapePrint(f.supplier)+"</div>");
+  parts.push("<div class='summary'>");
+  parts.push("<div class='pcard'><div class='label'>Total</div><div class='value'>"+fmt(total)+"</div></div>");
+  parts.push("<div class='pcard'><div class='label'>Value</div><div class='value'>"+fmt(value)+"</div></div>");
+  parts.push("<div class='pcard'><div class='label'>VAT</div><div class='value'>"+fmt(tax)+"</div></div>");
+  parts.push("<div class='pcard'><div class='label'>Rows</div><div class='value'>"+rows.length+"</div></div>");
+  parts.push("</div>");
+  parts.push("<h2>Product Summary</h2>");
+  parts.push("<table><thead><tr><th>Product</th><th>Rows</th><th>Qty</th><th>Total</th></tr></thead><tbody>"+productRows+"</tbody></table>");
+  parts.push("<div class='pagebreak'></div><h2>Purchase Detail</h2>");
+  parts.push("<table><thead><tr><th>Date</th><th>Department</th><th>Product</th><th>Supplier</th><th>Qty</th><th>UOM</th><th>Total</th></tr></thead><tbody>"+detailRows+"</tbody></table>");
+  parts.push("</body></html>");
+
+  const w=window.open("","_blank");
+  if(!w){alert("Popup blocked. Please allow popups.");return;}
+  w.document.open();
+  w.document.write(parts.join(""));
+  w.document.close();
+}
+
+function render(){const rows=filteredInvoices(),events=filteredEvents();renderOverview(rows,events);renderRisks(events);renderEmployees(rows,events);renderOps(rows,events);renderRaw(rows,events);renderDepartments();renderPurchases();renderReplay()}
+function resetFilters(){dateFilter.value="All Dates";channelFilter.value="All";employeeFilter.value="All Employees";searchBox.value="";if(document.getElementById("departmentFilter"))departmentFilter.value="All Departments";if(document.getElementById("deptChannelFilter"))deptChannelFilter.value="All Channels";if(document.getElementById("purchaseDeptFilter"))purchaseDeptFilter.value="All Purchase Departments";if(document.getElementById("supplierFilter"))supplierFilter.value="All Suppliers";render()}
+function populateFilters(){
+  dateFilter.innerHTML="<option>All Dates</option><option>Week To Date</option><option>Month To Date</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Date).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
+  employeeFilter.innerHTML="<option>All Employees</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Employee).filter(Boolean))].sort().map(e=>`<option>${e}</option>`).join("");
+
+  if(document.getElementById("departmentFilter")){
+    departmentFilter.innerHTML="<option>All Departments</option>"+[...new Set((DATA.department_timed||DATA.department_sales||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
+    deptChannelFilter.innerHTML="<option>All Channels</option>"+[...new Set((DATA.department_timed||[]).map(r=>r.Channel).filter(Boolean))].sort().map(c=>`<option>${c}</option>`).join("");
+  }
+
+  if(document.getElementById("purchaseDeptFilter")){
+    purchaseDeptFilter.innerHTML="<option>All Purchase Departments</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
+    supplierFilter.innerHTML="<option>All Suppliers</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Supplier).filter(Boolean))].sort().map(s=>`<option>${s}</option>`).join("");
+  }
+}
+function loadData(){fetch("data/gaap-dashboard-data.json?ts="+Date.now()).then(r=>r.json()).then(d=>{DATA=d;status.textContent="Last refresh: "+(DATA.generated_at||"unknown")+" · Files: "+((DATA.files||[]).map(f=>f.name).join(", ")||"none");populateFilters();["dateFilter","channelFilter","employeeFilter","searchBox","departmentFilter","deptChannelFilter","purchaseDeptFilter","supplierFilter"].forEach(id=>{const x=document.getElementById(id);if(x){x.addEventListener("change",render);x.addEventListener("input",render)}});render()}).catch(e=>{status.textContent="Could not load data/gaap-dashboard-data.json";console.error(e)})}
 </script></body></html>
