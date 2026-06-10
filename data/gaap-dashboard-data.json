@@ -6,5 +6,7 @@
   "events": [],
   "department_sales": [],
   "department_timed": [],
-  "purchases": []
+  "purchase_rows": [],
+  "purchase_report": [],
+  "purchase_report_files": []
 }
