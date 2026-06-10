@@ -10,6 +10,10 @@ function dateValue(v,f=""){if(v instanceof Date&&!isNaN(v))return v.toISOString(
 function timeValue(v){if(v instanceof Date&&!isNaN(v))return v.toISOString().slice(11,19);if(typeof v==="number"){const t=Math.round(v*86400),h=Math.floor(t/3600)%24,m=Math.floor((t%3600)/60),s=t%60;return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`}return String(v||"")}
 function hourFromTime(t){const s=String(t||"");return s.length>=2?`${s.slice(0,2)}:00`:"Unknown"}
 function mapRow(row){return Object.fromEntries(Object.keys(row).map(k=>[norm(k),row[k]]))}
+
+function val(m,names){for(const n of names){const k=norm(n);if(Object.prototype.hasOwnProperty.call(m,k)&&m[k]!=="")return m[k];}return ""}
+function categoryFromItem(item){const x=String(item||"").toLowerCase();if(/chicken|lamb|mutton|fish|prawn|egg|meat|mince/.test(x))return "Meat / Protein";if(/rice|flour|atta|maida|sugar|salt|oil|ghee|dal|lentil|spice|masala/.test(x))return "Dry Goods";if(/milk|cream|yogurt|curd|cheese|paneer|butter|amasi/.test(x))return "Dairy";if(/tomato|onion|potato|coriander|chilli|vegetable|veg|mint|ginger|garlic/.test(x))return "Vegetables";if(/gas|coal|charcoal|electric|water/.test(x))return "Utilities";if(/pack|container|bag|foil|tissue|napkin|cup|lid/.test(x))return "Packaging";return "Uncategorised"}
+
 function classifyChannel(employee,salesName,paymentMethod,orderNumber,device){
   const e=String(employee||"").trim().toLowerCase(), sn=String(salesName||"").trim(), pm=String(paymentMethod||"").toLowerCase(), on=String(orderNumber||"").toLowerCase(), dev=String(device||"").toLowerCase();
   if(e==="online" && sn) return "Uber Orders";
@@ -67,24 +71,29 @@ function parseDepartment(file,fp){
 }
 
 function parsePurchase(file,fp){
-  const rows=read(fp,8),out=[];let dept="";
-  for(const row of rows){
+  const fd=parseDateFromFilename(file.name),out=[];
+  for(const row of read(fp,8)){
     const m=mapRow(row);
-    const header=String(m["date"]||m["product name"]||"").trim();
-    if(header.toLowerCase().startsWith("dept lvl 1:")){
-      dept=header.replace(/^Dept Lvl 1:\s*/i,"").replace(/\s*\(Total:.*?\)\s*$/i,"").trim();
-      continue;
-    }
-    const product=String(m["product name"]||"").trim();
-    if(!product||product.toLowerCase()==="product name")continue;
-    const date=dateValue(m["date"],parseDateFromFilename(file.name));
-    if(!date)continue;
-    const baseQty=toNumber(m["base qty"]), purchaseQty=toNumber(m["purchase qty"]), value=toNumber(m["value"]), tax=toNumber(m["tax"]), total=toNumber(m["total"]);
-    if(!baseQty&&!purchaseQty&&!value&&!tax&&!total)continue;
-    out.push({source_file:file.name,Date:date,Department:dept||"Unmapped",Product:product,BaseUOM:String(m["base uom"]||"").trim(),BaseQty:baseQty,PurchaseUOM:String(m["purchase uom"]||"").trim(),PurchaseQty:purchaseQty,AverageCost:toNumber(m["average cost"]),LastCost:toNumber(m["last cost"]),Value:value,Tax:tax,Total:total,Supplier:String(m["supplier"]||"").trim()||"Unknown"});
+    const supplier=String(val(m,["supplier","supplier name","creditor","vendor","account name","name"])).trim();
+    const item=String(val(m,["product name","product","item","description","stock item","inventory item"])).trim();
+    const ref=String(val(m,["reference","invoice number","document number","doc no","supplier invoice","grv number","order number"])).trim();
+    const rawDate=val(m,["date","invoice date","document date","transaction date"]);
+    const date=dateValue(rawDate,fd);
+    const qty=toNumber(val(m,["qty","quantity","received qty","purchased qty","order qty"]));
+    const unit=toNumber(val(m,["unit price","price","cost price","unit cost","exclusive price"]));
+    const vat=toNumber(val(m,["vat","tax","vat amount","tax amount"]));
+    let amount=toNumber(val(m,["total incl","total inclusive","inclusive","amount incl","total","amount","debit","gross"]));
+    const ex=toNumber(val(m,["total excl","exclusive","amount excl","net","nett"]));
+    if(!amount && ex) amount=ex+vat;
+    if(!amount && qty && unit) amount=qty*unit+vat;
+    if(!date && !supplier && !item && !amount) continue;
+    if(String(supplier+item+ref).toLowerCase().includes("supplier") && !amount) continue;
+    const category=String(val(m,["category","department","group","stock group","expense category"])).trim()||categoryFromItem(item||supplier);
+    out.push({source_file:file.name,Date:date,Supplier:supplier||"Unknown",Category:category,Item:item||String(val(m,["description"])).trim()||"Purchase",Qty:qty,UnitPrice:unit,Amount:amount,Vat:vat,Reference:ref,InvoiceNumber:String(val(m,["invoice number","supplier invoice"])).trim(),PaymentMethod:String(val(m,["payment method","payment","tender"])).trim(),Notes:String(val(m,["notes","memo","comment"])).trim()});
   }
-  return out;
+  return out.filter(r=>r.Date||r.Amount||r.Supplier!=="Unknown"||r.Item!=="Purchase");
 }
+function purchaseKpi(rows){return{purchase_total:rows.reduce((a,r)=>a+Number(r.Amount||0),0),purchase_rows:rows.length,purchase_vat:rows.reduce((a,r)=>a+Number(r.Vat||0),0),purchase_suppliers:new Set(rows.map(r=>r.Supplier).filter(Boolean)).size,purchase_categories:new Set(rows.map(r=>r.Category).filter(Boolean)).size}}
 
 function auditByInvoice(events){
   const m={};
@@ -120,15 +129,15 @@ async function main(){
   const auth=new google.auth.GoogleAuth({credentials:JSON.parse(SERVICE_ACCOUNT_JSON),scopes:["https://www.googleapis.com/auth/drive.readonly"]}),drive=google.drive({version:"v3",auth});
   const payFiles=await list(drive,PAYTYPE_FOLDER_ID),auditFiles=await list(drive,AUDIT_FOLDER_ID),deptFiles=await list(drive,DEPT_FOLDER_ID),purchaseFiles=await list(drive,PURCHASE_FOLDER_ID);
   console.log("Paytype files found:",payFiles.map(f=>f.name).join(", ")||"NONE");console.log("Sales Audit files found:",auditFiles.map(f=>f.name).join(", ")||"NONE");console.log("Department Sales files found:",deptFiles.map(f=>f.name).join(", ")||"NONE");console.log("Purchase files found:",purchaseFiles.map(f=>f.name).join(", ")||"NONE");
-  let pay=[],events=[],department_sales=[],purchases=[];
+  let pay=[],events=[],department_sales=[],purchase_rows=[];
   for(const f of payFiles){const parsed=parsePaytype(f,await dl(drive,f,"paytype"));console.log(`${f.name}: paytype rows loaded = ${parsed.length}`);pay=pay.concat(parsed)}
   for(const f of auditFiles){const parsed=parseAudit(f,await dl(drive,f,"audit"));console.log(`${f.name}: audit rows loaded = ${parsed.length}`);events=events.concat(parsed)}
   for(const f of deptFiles){const parsed=parseDepartment(f,await dl(drive,f,"department"));console.log(`${f.name}: department rows loaded = ${parsed.length}`);department_sales=department_sales.concat(parsed)}
-  for(const f of purchaseFiles){const parsed=parsePurchase(f,await dl(drive,f,"purchase"));console.log(`${f.name}: purchase rows loaded = ${parsed.length}`);purchases=purchases.concat(parsed)}
+  for(const f of purchaseFiles){const parsed=parsePurchase(f,await dl(drive,f,"purchase"));console.log(`${f.name}: purchase rows loaded = ${parsed.length}`);purchase_rows=purchase_rows.concat(parsed)}
   const inv=invoices(pay,events),payByInvoice={}; for(const p of pay){payByInvoice[p["Invoice Number"]]=p;}
   const department_timed=buildDepartmentTimed(department_sales,events,payByInvoice);
-  const output={generated_at:new Date().toISOString(),files:[...payFiles.map(f=>({type:"Paytype",name:f.name,modifiedTime:f.modifiedTime})),...auditFiles.map(f=>({type:"SalesAudit",name:f.name,modifiedTime:f.modifiedTime})),...deptFiles.map(f=>({type:"DepartmentSales",name:f.name,modifiedTime:f.modifiedTime})),...purchaseFiles.map(f=>({type:"PurchaseReport",name:f.name,modifiedTime:f.modifiedTime}))],kpi:kpi(inv,pay,events),invoices:inv,events,paytype_rows:pay,department_sales,department_timed,purchases,department_sales_files:deptFiles.map(f=>f.name),purchase_report_files:purchaseFiles.map(f=>f.name)};
+  const output={generated_at:new Date().toISOString(),files:[...payFiles.map(f=>({type:"Paytype",name:f.name,modifiedTime:f.modifiedTime})),...auditFiles.map(f=>({type:"SalesAudit",name:f.name,modifiedTime:f.modifiedTime})),...deptFiles.map(f=>({type:"DepartmentSales",name:f.name,modifiedTime:f.modifiedTime})),...purchaseFiles.map(f=>({type:"PurchaseReport",name:f.name,modifiedTime:f.modifiedTime}))],kpi:{...kpi(inv,pay,events),...purchaseKpi(purchase_rows)},invoices:inv,events,paytype_rows:pay,department_sales,department_timed,purchase_rows,purchase_report:purchase_rows,department_sales_files:deptFiles.map(f=>f.name),purchase_report_files:purchaseFiles.map(f=>f.name)};
   fs.writeFileSync(OUT_FILE,JSON.stringify(output,null,2));fs.writeFileSync(path.join(OUT_DIR,"paytype-data.json"),JSON.stringify(output,null,2));
-  console.log(`Created ${OUT_FILE}`);console.log(`Paytype rows loaded: ${pay.length}`);console.log(`Audit rows loaded: ${events.length}`);console.log(`Department rows loaded: ${department_sales.length}`);console.log(`Department timed rows loaded: ${department_timed.length}`);console.log(`Purchase rows loaded: ${purchases.length}`);console.log(`Invoices created: ${inv.length}`);console.log(`Total sales: ${output.kpi.total_sales}`);
+  console.log(`Created ${OUT_FILE}`);console.log(`Paytype rows loaded: ${pay.length}`);console.log(`Audit rows loaded: ${events.length}`);console.log(`Department rows loaded: ${department_sales.length}`);console.log(`Department timed rows loaded: ${department_timed.length}`);console.log(`Purchase rows loaded: ${purchase_rows.length}`);console.log(`Invoices created: ${inv.length}`);console.log(`Total sales: ${output.kpi.total_sales}`);
 }
 main().catch(e=>{console.error(e);process.exit(1)})
