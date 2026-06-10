@@ -63,7 +63,7 @@ header{background:linear-gradient(135deg,#111827,#374151);color:white;padding:22
   </div>
   <div class="card">
     <h2>Purchase Detail</h2>
-    <p class="note">Uses the same date dropdown: All Dates, Week To Date, Month To Date, or a specific date.</p>
+    <p class="note">Uses All Dates, Week To Date, Month To Date, or a specific date from the main date dropdown.</p>
     <div class="table-wrap"><table id="purchaseDetailTable"></table></div>
   </div>
 </section>
@@ -119,105 +119,36 @@ function filteredPurchases(){
   const f=filters();
   return (DATA.purchases||[]).filter(r=>dateInRange(r.Date,f.date)&&(f.pdept==="All Purchase Departments"||r.Department===f.pdept)&&(f.supplier==="All Suppliers"||r.Supplier===f.supplier)&&(!f.q||[r.Department,r.Product,r.Supplier,r.BaseUOM,r.PurchaseUOM].map(safe).join(" ").toLowerCase().includes(f.q)));
 }
-function aggregateRows(rows,keyFn){
+function aggregatePurchaseRows(rows,keyFn){
   const m={};
-  rows.forEach(r=>{
-    const k=keyFn(r)||"Unknown";
-    m[k]=m[k]||{qty:0,total:0,value:0,tax:0,count:0};
-    m[k].qty+=Number(r.PurchaseQty||r.BaseQty||0);
-    m[k].total+=Number(r.Total||0);
-    m[k].value+=Number(r.Value||0);
-    m[k].tax+=Number(r.Tax||0);
-    m[k].count++;
-  });
+  rows.forEach(r=>{const k=keyFn(r)||"Unknown";m[k]=m[k]||{qty:0,total:0,value:0,tax:0,count:0};m[k].qty+=Number(r.PurchaseQty||r.BaseQty||0);m[k].total+=Number(r.Total||0);m[k].value+=Number(r.Value||0);m[k].tax+=Number(r.Tax||0);m[k].count++;});
   return Object.entries(m).sort((a,b)=>b[1].total-a[1].total);
 }
 function renderPurchases(){
   if(!document.getElementById("purchaseKpis")) return;
   const rows=filteredPurchases();
-  const total=rows.reduce((s,r)=>s+Number(r.Total||0),0);
-  const value=rows.reduce((s,r)=>s+Number(r.Value||0),0);
-  const tax=rows.reduce((s,r)=>s+Number(r.Tax||0),0);
-  const salesRows=filteredInvoices();
-  const sales=salesRows.reduce((s,r)=>s+Number(r.Sales||0),0);
-  const purchasePct=sales?((total/sales)*100).toFixed(1)+"%":"-";
-
-  purchaseKpis.innerHTML=[
-    card("Total Purchases",fmt(total),`${rows.length} purchase rows`),
-    card("Purchase Value",fmt(value),"ex VAT"),
-    card("VAT",fmt(tax),"tax"),
-    card("Suppliers",new Set(rows.map(r=>r.Supplier)).size,"suppliers"),
-    card("Products",new Set(rows.map(r=>r.Product)).size,"items"),
-    card("Purchase % Sales",purchasePct,`Sales ${fmt(sales)}`)
-  ].join("");
-
-  table("purchaseDeptTable",["Department","Rows","Qty","Value","Tax","Total"],aggregateRows(rows,r=>r.Department).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
-  table("purchaseSupplierTable",["Supplier","Rows","Qty","Value","Tax","Total"],aggregateRows(rows,r=>r.Supplier).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
-  table("purchaseProductTable",["Product","Rows","Qty","UOM","Avg Cost","Total"],aggregateRows(rows,r=>r.Product).slice(0,80).map(([k,v])=>{const sample=rows.find(r=>r.Product===k)||{};return[k,v.count,v.qty.toFixed(2),sample.PurchaseUOM||sample.BaseUOM||"",fmt(v.qty?v.total/v.qty:0),fmt(v.total)]}));
-
-  const byDate={};
-  rows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].purchases+=Number(r.Total||0)});
-  salesRows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].sales+=Number(r.Sales||0)});
-  table("purchaseVsSalesTable",["Date","Sales","Purchases","Purchase %"],Object.entries(byDate).sort().map(([d,v])=>[d,fmt(v.sales||0),fmt(v.purchases||0),(v.sales?((v.purchases/v.sales)*100).toFixed(1)+"%":"-")]));
-
-  table("purchaseDetailTable",["Date","Department","Product","Supplier","Base Qty","Base UOM","Purchase Qty","Purchase UOM","Avg Cost","Last Cost","Value","Tax","Total"],rows.sort((a,b)=>String(a.Date).localeCompare(String(b.Date))).slice(0,2000).map(r=>[r.Date,r.Department,r.Product,r.Supplier,Number(r.BaseQty||0).toFixed(2),r.BaseUOM,Number(r.PurchaseQty||0).toFixed(2),r.PurchaseUOM,fmt(r.AverageCost),fmt(r.LastCost),fmt(r.Value),fmt(r.Tax),fmt(r.Total)]));
-}
-function htmlEscapePrint(v){
-  return String(v==null?"":v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+  const total=rows.reduce((s,r)=>s+Number(r.Total||0),0), value=rows.reduce((s,r)=>s+Number(r.Value||0),0), tax=rows.reduce((s,r)=>s+Number(r.Tax||0),0);
+  const salesRows=filteredInvoices(), sales=salesRows.reduce((s,r)=>s+Number(r.Sales||0),0);
+  const pct=sales?((total/sales)*100).toFixed(1)+"%":"-";
+  purchaseKpis.innerHTML=[card("Total Purchases",fmt(total),`${rows.length} rows`),card("Purchase Value",fmt(value),"ex VAT"),card("VAT",fmt(tax),"tax"),card("Suppliers",new Set(rows.map(r=>r.Supplier)).size,"suppliers"),card("Products",new Set(rows.map(r=>r.Product)).size,"items"),card("Purchase % Sales",pct,`Sales ${fmt(sales)}`)].join("");
+  table("purchaseDeptTable",["Department","Rows","Qty","Value","Tax","Total"],aggregatePurchaseRows(rows,r=>r.Department).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
+  table("purchaseSupplierTable",["Supplier","Rows","Qty","Value","Tax","Total"],aggregatePurchaseRows(rows,r=>r.Supplier).map(([k,v])=>[k,v.count,v.qty.toFixed(2),fmt(v.value),fmt(v.tax),fmt(v.total)]));
+  table("purchaseProductTable",["Product","Rows","Qty","UOM","Avg Cost","Total"],aggregatePurchaseRows(rows,r=>r.Product).slice(0,100).map(([k,v])=>{const sample=rows.find(r=>r.Product===k)||{};return[k,v.count,v.qty.toFixed(2),sample.PurchaseUOM||sample.BaseUOM||"",fmt(v.qty?v.total/v.qty:0),fmt(v.total)]}));
+  const byDate={}; rows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].purchases+=Number(r.Total||0)}); salesRows.forEach(r=>{byDate[r.Date]=byDate[r.Date]||{purchases:0,sales:0};byDate[r.Date].sales+=Number(r.Sales||0)});
+  table("purchaseVsSalesTable",["Date","Sales","Purchases","Purchase %"],Object.entries(byDate).sort().map(([d,v])=>[d,fmt(v.sales||0),fmt(v.purchases||0),v.sales?((v.purchases/v.sales)*100).toFixed(1)+"%":"-"]));
+  table("purchaseDetailTable",["Date","Department","Product","Supplier","Base Qty","Base UOM","Purchase Qty","Purchase UOM","Avg Cost","Last Cost","Value","Tax","Total"],rows.sort((a,b)=>String(a.Date).localeCompare(String(b.Date))).slice(0,2500).map(r=>[r.Date,r.Department,r.Product,r.Supplier,Number(r.BaseQty||0).toFixed(2),r.BaseUOM,Number(r.PurchaseQty||0).toFixed(2),r.PurchaseUOM,fmt(r.AverageCost),fmt(r.LastCost),fmt(r.Value),fmt(r.Tax),fmt(r.Total)]));
 }
 function printPurchaseReport(){
-  const rows=filteredPurchases();
-  const f=filters();
+  const rows=filteredPurchases(), f=filters();
   const total=rows.reduce((s,r)=>s+Number(r.Total||0),0);
-  const value=rows.reduce((s,r)=>s+Number(r.Value||0),0);
-  const tax=rows.reduce((s,r)=>s+Number(r.Tax||0),0);
-  const byProduct=aggregateRows(rows,r=>r.Product).slice(0,150);
-  const detail=rows.sort((a,b)=>String(a.Date+a.Department+a.Product).localeCompare(String(b.Date+b.Department+b.Product))).slice(0,2500);
-
-  let productRows="";
-  byProduct.forEach(([k,v])=>{
-    productRows += "<tr><td>"+htmlEscapePrint(k)+"</td><td>"+v.count+"</td><td>"+v.qty.toFixed(2)+"</td><td>"+fmt(v.total)+"</td></tr>";
-  });
-
-  let detailRows="";
-  detail.forEach(r=>{
-    detailRows += "<tr>"
-      + "<td>"+htmlEscapePrint(r.Date)+"</td>"
-      + "<td>"+htmlEscapePrint(r.Department)+"</td>"
-      + "<td>"+htmlEscapePrint(r.Product)+"</td>"
-      + "<td>"+htmlEscapePrint(r.Supplier)+"</td>"
-      + "<td>"+Number(r.PurchaseQty||r.BaseQty||0).toFixed(2)+"</td>"
-      + "<td>"+htmlEscapePrint(r.PurchaseUOM||r.BaseUOM||"")+"</td>"
-      + "<td>"+fmt(r.Total)+"</td>"
-      + "</tr>";
-  });
-
-  const css = "body{font-family:Arial;margin:24px;color:#111827}h1{margin:0 0 8px}table{border-collapse:collapse;width:100%;font-size:12px;margin-top:14px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f3f4f6}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.pcard{border:1px solid #ddd;padding:10px;border-radius:10px}.label{font-size:11px;color:#666}.value{font-size:20px;font-weight:700}@media print{button{display:none}.pagebreak{page-break-before:always}}";
-
-  const parts=[];
-  parts.push("<!doctype html><html><head><meta charset='utf-8'><title>Bawarchi Purchase Report</title><style>");
-  parts.push(css);
-  parts.push("</style></head><body>");
-  parts.push("<button onclick='window.print()'>Print</button>");
-  parts.push("<h1>BAWARCHI PURCHASE REPORT</h1>");
-  parts.push("<div>Date Filter: "+htmlEscapePrint(f.date)+" | Department: "+htmlEscapePrint(f.pdept)+" | Supplier: "+htmlEscapePrint(f.supplier)+"</div>");
-  parts.push("<div class='summary'>");
-  parts.push("<div class='pcard'><div class='label'>Total</div><div class='value'>"+fmt(total)+"</div></div>");
-  parts.push("<div class='pcard'><div class='label'>Value</div><div class='value'>"+fmt(value)+"</div></div>");
-  parts.push("<div class='pcard'><div class='label'>VAT</div><div class='value'>"+fmt(tax)+"</div></div>");
-  parts.push("<div class='pcard'><div class='label'>Rows</div><div class='value'>"+rows.length+"</div></div>");
-  parts.push("</div>");
-  parts.push("<h2>Product Summary</h2>");
-  parts.push("<table><thead><tr><th>Product</th><th>Rows</th><th>Qty</th><th>Total</th></tr></thead><tbody>"+productRows+"</tbody></table>");
-  parts.push("<div class='pagebreak'></div><h2>Purchase Detail</h2>");
-  parts.push("<table><thead><tr><th>Date</th><th>Department</th><th>Product</th><th>Supplier</th><th>Qty</th><th>UOM</th><th>Total</th></tr></thead><tbody>"+detailRows+"</tbody></table>");
-  parts.push("</body></html>");
-
-  const w=window.open("","_blank");
-  if(!w){alert("Popup blocked. Please allow popups.");return;}
-  w.document.open();
-  w.document.write(parts.join(""));
-  w.document.close();
+  const summary=aggregatePurchaseRows(rows,r=>r.Product).slice(0,150);
+  let body="<!doctype html><html><head><meta charset='utf-8'><title>Bawarchi Purchase Report</title><style>body{font-family:Arial;margin:24px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f3f4f6}@media print{button{display:none}}</style></head><body>";
+  body+="<button onclick='window.print()'>Print</button><h1>BAWARCHI PURCHASE REPORT</h1>";
+  body+="<p>Date Filter: "+f.date+" | Department: "+f.pdept+" | Supplier: "+f.supplier+" | Total: "+fmt(total)+"</p>";
+  body+="<h2>Product Summary</h2><table><thead><tr><th>Product</th><th>Rows</th><th>Qty</th><th>Total</th></tr></thead><tbody>";
+  summary.forEach(([k,v])=>{body+="<tr><td>"+k+"</td><td>"+v.count+"</td><td>"+v.qty.toFixed(2)+"</td><td>"+fmt(v.total)+"</td></tr>"});
+  body+="</tbody></table></body></html>";
+  const w=window.open("","_blank"); if(!w){alert("Popup blocked. Please allow popups.");return;} w.document.open(); w.document.write(body); w.document.close();
 }
 
 function render(){const rows=filteredInvoices(),events=filteredEvents();renderOverview(rows,events);renderRisks(events);renderEmployees(rows,events);renderOps(rows,events);renderRaw(rows,events);renderDepartments();renderPurchases();renderReplay()}
@@ -225,16 +156,8 @@ function resetFilters(){dateFilter.value="All Dates";channelFilter.value="All";e
 function populateFilters(){
   dateFilter.innerHTML="<option>All Dates</option><option>Week To Date</option><option>Month To Date</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Date).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
   employeeFilter.innerHTML="<option>All Employees</option>"+[...new Set((DATA.invoices||[]).map(r=>r.Employee).filter(Boolean))].sort().map(e=>`<option>${e}</option>`).join("");
-
-  if(document.getElementById("departmentFilter")){
-    departmentFilter.innerHTML="<option>All Departments</option>"+[...new Set((DATA.department_timed||DATA.department_sales||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
-    deptChannelFilter.innerHTML="<option>All Channels</option>"+[...new Set((DATA.department_timed||[]).map(r=>r.Channel).filter(Boolean))].sort().map(c=>`<option>${c}</option>`).join("");
-  }
-
-  if(document.getElementById("purchaseDeptFilter")){
-    purchaseDeptFilter.innerHTML="<option>All Purchase Departments</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join("");
-    supplierFilter.innerHTML="<option>All Suppliers</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Supplier).filter(Boolean))].sort().map(s=>`<option>${s}</option>`).join("");
-  }
+  if(document.getElementById("departmentFilter")){departmentFilter.innerHTML="<option>All Departments</option>"+[...new Set((DATA.department_timed||DATA.department_sales||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join(""); deptChannelFilter.innerHTML="<option>All Channels</option>"+[...new Set((DATA.department_timed||[]).map(r=>r.Channel).filter(Boolean))].sort().map(c=>`<option>${c}</option>`).join("");}
+  if(document.getElementById("purchaseDeptFilter")){purchaseDeptFilter.innerHTML="<option>All Purchase Departments</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Department).filter(Boolean))].sort().map(d=>`<option>${d}</option>`).join(""); supplierFilter.innerHTML="<option>All Suppliers</option>"+[...new Set((DATA.purchases||[]).map(r=>r.Supplier).filter(Boolean))].sort().map(s=>`<option>${s}</option>`).join("");}
 }
 function loadData(){fetch("data/gaap-dashboard-data.json?ts="+Date.now()).then(r=>r.json()).then(d=>{DATA=d;status.textContent="Last refresh: "+(DATA.generated_at||"unknown")+" · Files: "+((DATA.files||[]).map(f=>f.name).join(", ")||"none");populateFilters();["dateFilter","channelFilter","employeeFilter","searchBox","departmentFilter","deptChannelFilter","purchaseDeptFilter","supplierFilter"].forEach(id=>{const x=document.getElementById(id);if(x){x.addEventListener("change",render);x.addEventListener("input",render)}});render()}).catch(e=>{status.textContent="Could not load data/gaap-dashboard-data.json";console.error(e)})}
 </script></body></html>
